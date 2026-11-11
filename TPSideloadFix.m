@@ -34,7 +34,7 @@ static OSStatus (*orig_SecItemDelete)(CFDictionaryRef);
 static NSString *gTPAccessGroup;      // 這個 App 實際可用的鑰匙圈群組（例如 ABCDE12345.com.example.threads）
 static NSString *gTPFixStatus;        // 給除錯提示看的狀態
 
-// ---- 診斷：記錄這次啟動期間鑰匙圈的狀況，用來追查「還是會被登出」 ----
+// ---- 診斷：記錄這次啟動期間鑰匙圈的讀寫與錯誤次數 ----
 static volatile int32_t gTPCalls, gTPRewrites, gTPErrors;
 static OSStatus gTPLastError;
 static char gTPLastErrorWhere[96];
