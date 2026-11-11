@@ -1,4 +1,3 @@
-# 共用步驟：在 macOS 機器上安裝 Theos 與 iOS SDK，並讀取 ThreadsPulse 版本號
 name: Setup Theos
 description: 安裝 Theos、iOS SDK，並輸出 ThreadsPulse 版本號
 
