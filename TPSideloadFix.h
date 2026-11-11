@@ -5,3 +5,5 @@
 void TPSideloadFixInstall(void);
 /// 目前狀態（給除錯提示用）
 NSString *TPSideloadFixStatus(void);
+/// 這次啟動以來鑰匙圈的呼叫、改寫、錯誤次數（給除錯提示用）
+NSString *TPSideloadFixStats(void);

@@ -17,6 +17,14 @@ NSString *const TPKeyKeepFeed        = @"tp_keep_feed";
 NSString *const TPKeyPinTabBar       = @"tp_pin_tab_bar";
 NSString *const TPKeyCopyProfile     = @"tp_copy_profile";
 NSString *const TPKeySideloadFix     = @"tp_sideload_fix";
+NSString *const TPKeyBlockScreenshotDetect = @"tp_block_screenshot_detect";
+NSString *const TPKeyBlockAnalytics  = @"tp_block_analytics";
+NSString *const TPKeyExternalBrowser = @"tp_external_browser";
+NSString *const TPKeyHideIGButton    = @"tp_hide_ig_button";
+NSString *const TPKeyHomeLongPress   = @"tp_home_long_press";
+NSString *const TPKeyTheme           = @"tp_theme";
+NSString *const TPKeyHideFeedSuggest = @"tp_hide_feed_suggest";
+NSString *const TPKeyNoAutoplay      = @"tp_no_autoplay";
 NSString *const TPKeyHideFollowSuggest = @"tp_hide_follow_suggest";
 NSString *const TPKeyKeepFeedLimit   = @"tp_keep_feed_limit";
 NSString *const TPKeyNoPullRefresh   = @"tp_no_pull_refresh";
@@ -27,11 +35,11 @@ static NSString *const kSuite = @"com.example.threadspulse";
 
 static NSArray<NSString *> *TPBoolKeys(void) {
     return @[TPKeyBlockAds, TPKeyStripTracking, TPKeyShowDownloadBtn, TPKeyDebugToast,
-             TPKeyOriginalImage, TPKeyOriginalAvatar, TPKeyClipboardLinks, TPKeyConfirmLike, TPKeyKeepFeed, TPKeyHideFollowSuggest, TPKeyPinTabBar, TPKeyCopyProfile, TPKeySideloadFix,
+             TPKeyOriginalImage, TPKeyOriginalAvatar, TPKeyClipboardLinks, TPKeyConfirmLike, TPKeyKeepFeed, TPKeyHideFollowSuggest, TPKeyPinTabBar, TPKeyCopyProfile, TPKeySideloadFix, TPKeyBlockScreenshotDetect, TPKeyBlockAnalytics, TPKeyExternalBrowser, TPKeyHideIGButton, TPKeyHomeLongPress, TPKeyHideFeedSuggest, TPKeyNoAutoplay,
              TPKeyNoPullRefresh, TPKeyTabNoScrollTop, TPKeyTabNoRefresh];
 }
 static NSArray<NSString *> *TPIntKeys(void) {
-    return @[TPKeyPlaySpeed, TPKeyExactTime, TPKeyClipboardMode, TPKeyBannerPosition, TPKeyKeepFeedLimit];
+    return @[TPKeyPlaySpeed, TPKeyExactTime, TPKeyClipboardMode, TPKeyBannerPosition, TPKeyKeepFeedLimit, TPKeyTheme];
 }
 /// 各整數設定的合法範圍上限（含），匯入時用來擋掉不合理的值
 static NSInteger TPIntMax(NSString *key) {
@@ -40,6 +48,7 @@ static NSInteger TPIntMax(NSString *key) {
     if ([key isEqualToString:TPKeyClipboardMode])  return 1;
     if ([key isEqualToString:TPKeyBannerPosition]) return 2;
     if ([key isEqualToString:TPKeyKeepFeedLimit])  return 2;
+    if ([key isEqualToString:TPKeyTheme])          return 5;
     return 0;
 }
 
@@ -55,7 +64,7 @@ static NSInteger TPIntMax(NSString *key) {
             TPKeyDebugToast: @NO,       TPKeyOriginalImage: @YES,
             TPKeyPlaySpeed: @0,
             TPKeyExactTime: @0,         TPKeyConfirmLike: @NO,      TPKeyOriginalAvatar: @YES,  TPKeyClipboardLinks: @NO,  TPKeyClipboardMode: @0,  TPKeyBannerPosition: @0,
-            TPKeyHideFollowSuggest: @YES, TPKeyPinTabBar: @NO, TPKeyCopyProfile: @YES, TPKeySideloadFix: @YES, TPKeyKeepFeed: @NO,         TPKeyKeepFeedLimit: @0,
+            TPKeyHideFollowSuggest: @YES, TPKeyPinTabBar: @NO, TPKeyCopyProfile: @YES, TPKeySideloadFix: @YES, TPKeyBlockScreenshotDetect: @YES, TPKeyBlockAnalytics: @NO, TPKeyExternalBrowser: @NO, TPKeyHideIGButton: @NO, TPKeyHomeLongPress: @NO, TPKeyTheme: @0, TPKeyHideFeedSuggest: @YES, TPKeyNoAutoplay: @NO, TPKeyKeepFeed: @NO,         TPKeyKeepFeedLimit: @0,
             TPKeyNoPullRefresh: @NO,    TPKeyTabNoScrollTop: @NO,   TPKeyTabNoRefresh: @NO,
         }];
         // 清掉已移除功能留下的舊設定

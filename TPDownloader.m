@@ -318,6 +318,27 @@ static NSURL *TPBestImageURLIn(id obj) {
 
 + (NSURL *)bestImageURLHarvestedFromObject:(id)obj { return TPBestImageURLIn(obj); }
 
++ (NSURL *)bestVideoURLNearView:(UIView *)view {
+    int level = 0;
+    for (UIView *v = view; v && level < 8; v = v.superview, level++) {
+        NSMutableArray *models = [NSMutableArray array];
+        for (Class c = object_getClass(v); c && c != [UIView class]; c = class_getSuperclass(c)) {
+            unsigned int n = 0;
+            Ivar *ivars = class_copyIvarList(c, &n);
+            for (unsigned int i = 0; i < n; i++) {
+                const char *enc = ivar_getTypeEncoding(ivars[i]);
+                if (!enc || enc[0] != '@' || enc[1] == '?') continue;      // 只看物件型別的欄位
+                id o = object_getIvar(v, ivars[i]);
+                if (o && ![o isKindOfClass:[UIResponder class]] && ![o isKindOfClass:[CALayer class]]) [models addObject:o];
+            }
+            free(ivars);
+        }
+        NSURL *u = models.count ? [self bestVideoURLHarvestedFromObject:models] : nil;
+        if (u) return u;
+    }
+    return nil;
+}
+
 
 + (id)safeValue:(id)obj key:(NSString *)key { return TPSafeValue(obj, key); }
 

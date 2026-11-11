@@ -10,6 +10,14 @@ extern NSString *const TPKeyOriginalImage;   // 圖片嘗試下載原始大小
 extern NSString *const TPKeyClipboardLinks;  // 偵測剪貼簿裡的連結
 extern NSString *const TPKeyConfirmLike;     // 按讚前確認
 extern NSString *const TPKeyHideFollowSuggest; // 隱藏自動跳出的「追蹤對象建議」
+extern NSString *const TPKeyNoAutoplay;       // 停用動態影片自動播放
+extern NSString *const TPKeyHideFeedSuggest;  // 隱藏動態裡的推薦帳號卡片
+extern NSString *const TPKeyBlockScreenshotDetect; // 停用截圖偵測
+extern NSString *const TPKeyBlockAnalytics;  // 阻擋分析回傳
+extern NSString *const TPKeyExternalBrowser; // 連結用外部瀏覽器開啟
+extern NSString *const TPKeyHideIGButton;    // 隱藏個人檔案的 Instagram 按鈕
+extern NSString *const TPKeyHomeLongPress;   // 長按首頁標籤開啟設定
+extern NSString *const TPKeyTheme;           // 插件主題配色（0 珊瑚 … 5 琥珀）
 extern NSString *const TPKeySideloadFix;     // 側載相容修正（重新簽名後的鑰匙圈／App 群組）
 extern NSString *const TPKeyCopyProfile;     // 個人檔案長按可複製用戶名稱／個人簡介
 extern NSString *const TPKeyPinTabBar;       // 固定底部標籤列（捲動時不隱藏）

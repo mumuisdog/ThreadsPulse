@@ -34,6 +34,29 @@ static OSStatus (*orig_SecItemDelete)(CFDictionaryRef);
 static NSString *gTPAccessGroup;      // 這個 App 實際可用的鑰匙圈群組（例如 ABCDE12345.com.example.threads）
 static NSString *gTPFixStatus;        // 給除錯提示看的狀態
 
+// ---- 診斷：記錄這次啟動期間鑰匙圈的狀況，用來追查「還是會被登出」 ----
+static volatile int32_t gTPCalls, gTPRewrites, gTPErrors;
+static OSStatus gTPLastError;
+static char gTPLastErrorWhere[96];
+
+static void TPRecord(const char *op, CFDictionaryRef query, BOOL rewritten, OSStatus s) {
+    __sync_fetch_and_add(&gTPCalls, 1);
+    if (rewritten) __sync_fetch_and_add(&gTPRewrites, 1);
+    if (s == errSecSuccess || s == errSecItemNotFound) return;
+    __sync_fetch_and_add(&gTPErrors, 1);
+    gTPLastError = s;
+    char group[64] = "-";
+    CFTypeRef g = query ? CFDictionaryGetValue(query, kSecAttrAccessGroup) : NULL;
+    if (g && CFGetTypeID(g) == CFStringGetTypeID()) CFStringGetCString(g, group, sizeof(group), kCFStringEncodingUTF8);
+    snprintf(gTPLastErrorWhere, sizeof(gTPLastErrorWhere), "%s %s", op, group);
+}
+
+NSString *TPSideloadFixStats(void) {
+    NSMutableString *r = [NSMutableString stringWithFormat:@"calls %d · rewrites %d · errors %d", gTPCalls, gTPRewrites, gTPErrors];
+    if (gTPErrors) [r appendFormat:@" (last %d: %s)", (int)gTPLastError, gTPLastErrorWhere];
+    return r;
+}
+
 #pragma mark - 鑰匙圈
 
 /// 存取群組不是我們能用的 → 換成實際可用的群組
@@ -52,6 +75,7 @@ static CFDictionaryRef TPFixQuery(CFDictionaryRef query, CFMutableDictionaryRef 
 static OSStatus tp_SecItemAdd(CFDictionaryRef attrs, CFTypeRef *result) {
     CFMutableDictionaryRef owned;
     OSStatus s = orig_SecItemAdd(TPFixQuery(attrs, &owned), result);
+    TPRecord("Add", attrs, owned != NULL, s);
     if (owned) CFRelease(owned);
     return s;
 }
@@ -59,6 +83,7 @@ static OSStatus tp_SecItemAdd(CFDictionaryRef attrs, CFTypeRef *result) {
 static OSStatus tp_SecItemCopyMatching(CFDictionaryRef query, CFTypeRef *result) {
     CFMutableDictionaryRef owned;
     OSStatus s = orig_SecItemCopyMatching(TPFixQuery(query, &owned), result);
+    TPRecord("Copy", query, owned != NULL, s);
     if (owned) CFRelease(owned);
     return s;
 }
@@ -66,6 +91,7 @@ static OSStatus tp_SecItemCopyMatching(CFDictionaryRef query, CFTypeRef *result)
 static OSStatus tp_SecItemUpdate(CFDictionaryRef query, CFDictionaryRef attrs) {
     CFMutableDictionaryRef owned1, owned2;
     OSStatus s = orig_SecItemUpdate(TPFixQuery(query, &owned1), TPFixQuery(attrs, &owned2));
+    TPRecord("Update", query, owned1 != NULL || owned2 != NULL, s);
     if (owned1) CFRelease(owned1);
     if (owned2) CFRelease(owned2);
     return s;
@@ -74,6 +100,7 @@ static OSStatus tp_SecItemUpdate(CFDictionaryRef query, CFDictionaryRef attrs) {
 static OSStatus tp_SecItemDelete(CFDictionaryRef query) {
     CFMutableDictionaryRef owned;
     OSStatus s = orig_SecItemDelete(TPFixQuery(query, &owned));
+    TPRecord("Delete", query, owned != NULL, s);
     if (owned) CFRelease(owned);
     return s;
 }

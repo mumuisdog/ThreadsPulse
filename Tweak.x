@@ -24,6 +24,11 @@
 - (void)tp_threeFingerLongPress:(id)gesture;
 // IGFNFVideoPlayer 沒有標頭可用，先宣告這個方法讓編譯器認得
 - (void)setPlaybackSpeed:(float)speed;
+- (BOOL)isPlaying;
+- (void)play;          // FNFPlayer
+- (void)pause;
+- (void)setVolume:(float)volume rampTime:(float)time;   // FNFPlayer
+- (id)videoPlayer;     // Swift 外層 IGVideoPlayer → 內層 IGFNFVideoPlayer
 // IGPhoto：依寬度取得對應尺寸的圖片網址（回傳 IGImageURL）
 - (id)imageURLForWidth:(double)width;
 @end
@@ -187,9 +192,32 @@ static BOOL TPInsideFeedMediaCell(UIView *v) {
 static const void *kTPButtonKey = &kTPButtonKey;
 static const void *kTPPlayerKey = &kTPPlayerKey;
 
+static const void *kTPPlayerViewKey = &kTPPlayerViewKey;
+
+/// 弱參照容器：讓播放器記得自己的畫面，又不會互相保留造成記憶體洩漏
+@interface TPWeakBox : NSObject
+@property (nonatomic, weak) id object;
+@end
+@implementation TPWeakBox
+@end
+
+static void TPPauseIfHeld(id player);   // 停用自動播放：定義在後面
+
+/// 影片畫面拿到的是 Swift 外層播放器；真正被擋下播放的是它裡面的 IGFNFVideoPlayer
+static id TPInnerPlayer(id player) {
+    if (![player respondsToSelector:@selector(videoPlayer)]) return player;
+    id inner = [player videoPlayer];
+    return inner ?: player;
+}
+
 static inline void TPRememberPlayer(id view, id player) {
-    if (player && objc_getAssociatedObject(view, kTPPlayerKey) != player)
-        objc_setAssociatedObject(view, kTPPlayerKey, player, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if (!player || objc_getAssociatedObject(view, kTPPlayerKey) == player) return;
+    objc_setAssociatedObject(view, kTPPlayerKey, player, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    TPWeakBox *box = [TPWeakBox new];
+    box.object = view;
+    objc_setAssociatedObject(player, kTPPlayerViewKey, box, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    id inner = TPInnerPlayer(player);
+    if (inner != player) objc_setAssociatedObject(inner, kTPPlayerViewKey, box, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 static void TPEnsureVideoButton(UIView *host) {
@@ -206,7 +234,9 @@ static void TPEnsureVideoButton(UIView *host) {
             UIView *v = weakHost;
             if (!v) return;
             id player = objc_getAssociatedObject(v, kTPPlayerKey);
-            NSURL *url = [TPDownloader bestURLFromVideoView:v player:player];
+            // 先從影片附近的資料物件找網址（影片沒播放過也找得到），找不到才問播放器
+            NSURL *url = [TPDownloader bestVideoURLNearView:v];
+            if (!url) url = [TPDownloader bestURLFromVideoView:v player:player];
             if (!url) {
                 if ([TPPrefs boolForKey:TPKeyDebugToast])
                     [TPDownloader showReport:[TPDownloader debugReportForVideoView:v player:player]];
@@ -233,7 +263,7 @@ static void TPEnsureVideoButton(UIView *host) {
 %hook _TtC11IGVideoView11IGVideoView
 
 - (void)videoPlayerDidPrepare:(id)player { %orig; TPRememberPlayer(self, player); }
-- (void)videoPlayerDidInitialPlay:(id)player { %orig; TPRememberPlayer(self, player); }
+- (void)videoPlayerDidInitialPlay:(id)player { %orig; TPRememberPlayer(self, player); TPPauseIfHeld(player); }
 - (void)videoPlayerDidReadyToDisplay:(id)player { %orig; TPRememberPlayer(self, player); }
 - (void)videoPlayer:(id)player didLoadVideoInView:(id)view playbackReason:(long long)reason { %orig; TPRememberPlayer(self, player); }
 - (void)videoPlayer:(id)player didUpdateLoadingProgress:(double)progress { %orig; TPRememberPlayer(self, player); }
@@ -1114,6 +1144,94 @@ static float TPSpeedForIndex(NSInteger i) {
 
 static const void *kTPPlayerInitKey = &kTPPlayerInitKey;
 
+#pragma mark   └ 停用自動播放
+
+// 做法：動態裡的影片滑進畫面時，讓 Threads 照常開始播放（聲音圖示等介面才會出現），
+// 但底層 FNFPlayer 先以音量 0 試播到第一格就停住，之後的播放要求一律忽略；點一下影片才放開。
+// 開始播放後同一個播放器不再按住，直到它被停止（滑走、cell 重用）。不在動態裡的影片（例如全螢幕）照常播放。
+static const void *kTPUserStartedKey = &kTPUserStartedKey;
+static const void *kTPTouchStartKey  = &kTPTouchStartKey;
+static const void *kTPHeldKey = &kTPHeldKey;   // 自動播放被「按住」：Threads 照常開始播放（喇叭圖示等介面才會出現），但底層播放器不准動
+static CFAbsoluteTime gTPLastTapAt = 0;
+
+/// IGFNFVideoPlayer 裡真正出聲出畫面的 FNFPlayer
+static id TPFNFPlayer(id inner) {
+    Ivar iv = class_getInstanceVariable(object_getClass(inner), "_player");
+    return iv ? object_getIvar(inner, iv) : nil;
+}
+
+static const void *kTPPrimedKey = &kTPPrimedKey;   // 被按住的底層播放器已經「靜音試播」過一次（讓 Threads 顯示聲音圖示）
+
+static void TPSetHeld(id inner, BOOL held) {
+    id v = held ? @YES : nil;
+    objc_setAssociatedObject(inner, kTPHeldKey, v, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    id fnf = TPFNFPlayer(inner);
+    if (!fnf) return;
+    objc_setAssociatedObject(fnf, kTPHeldKey, v, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if (!held && objc_getAssociatedObject(fnf, kTPPrimedKey)) {   // 放開：音量恢復
+        objc_setAssociatedObject(fnf, kTPPrimedKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        if ([fnf respondsToSelector:@selector(setVolume:rampTime:)]) [fnf setVolume:1.0f rampTime:0];
+    }
+}
+
+/// 試播的第一格出來了（Threads 這時會顯示聲音圖示）→ 立刻停住
+static void TPPauseIfHeld(id player) {
+    id inner = TPInnerPlayer(player);
+    if (!inner || !objc_getAssociatedObject(inner, kTPHeldKey)) return;
+    id fnf = TPFNFPlayer(inner);
+    if ([fnf respondsToSelector:@selector(pause)]) [fnf pause];
+}
+
+/// NO = 這次是動態裡的自動播放，要按住
+static BOOL TPPlayerMayPlay(id player, long long reason) {
+    if (![TPPrefs boolForKey:TPKeyNoAutoplay]) return YES;
+    if (objc_getAssociatedObject(player, kTPUserStartedKey)) return YES;
+    UIView *view = ((TPWeakBox *)objc_getAssociatedObject(player, kTPPlayerViewKey)).object;
+    BOOL tapped = CFAbsoluteTimeGetCurrent() - gTPLastTapAt < 1.5;
+    // 還不知道播放器在哪個畫面（剛滑進來時常常還沒對應上）也當作動態裡的影片
+    BOOL inFeed = !view || TPInsideFeedMediaCell(view);
+    // 只擋「滑進畫面自動播放」(reason 1) 而且在動態裡的影片；其他原因（點擊、全螢幕等）一律放行
+    if (reason != 1 || tapped || !inFeed) {
+        objc_setAssociatedObject(player, kTPUserStartedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        if (reason != 1) TPDebug([NSString stringWithFormat:@"%@ (%lld)", TPL(@"Playback allowed"), reason]);
+        return YES;
+    }
+    TPDebug([NSString stringWithFormat:@"%@ (%lld)", TPL(@"Autoplay blocked"), reason]);
+    return NO;
+}
+
+/// 點了某支被按住的影片：放開底層播放器，影片從第一格開始播
+static void TPPlayVideoAtTouch(UITouch *t) {
+    UIView *hit = t.view;
+    Class vcls = TPVideoViewClass();
+    if (!hit || !vcls) return;
+    UIView *video = nil;
+    for (UIView *v = hit; v; v = v.superview) if ([v isKindOfClass:vcls]) { video = v; break; }
+    if (!video) {                                              // 點到影片上的覆蓋層（例如喇叭圖示）：找同一個 cell 裡的影片
+        UIView *cell = hit;
+        Class cellCls = TPFeedMediaCellClass();
+        while (cell && !(cellCls && [cell isKindOfClass:cellCls])) cell = cell.superview;
+        if (cell) video = TPFindView(cell, vcls, 30);
+    }
+    if (!video) return;                                        // 沒點到影片：不是我們的事
+    id player = TPInnerPlayer(objc_getAssociatedObject(video, kTPPlayerKey));
+    if (!player) { TPDebug(TPL(@"Tap: no video player found")); return; }
+    objc_setAssociatedObject(player, kTPUserStartedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if (!objc_getAssociatedObject(player, kTPHeldKey)) return;   // 沒被按住（已經在播）：交給 Threads 自己處理
+    TPSetHeld(player, NO);
+    // 等 Threads 先處理完這次點擊（例如切換聲音、開啟全螢幕），再放開
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        id fnf = TPFNFPlayer(player);
+        if (![fnf respondsToSelector:@selector(play)]) { TPDebug(TPL(@"Tap: no video player found")); return; }
+        TPDebug(TPL(@"Tap: replaying video"));
+        [fnf play];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            if (![player respondsToSelector:@selector(isPlaying)]) return;
+            TPDebug(TPL([(id)player isPlaying] ? @"Tap: video is playing" : @"Tap: video still not playing"));
+        });
+    });
+}
+
 
 %group VideoSettings
 
@@ -1121,12 +1239,22 @@ static const void *kTPPlayerInitKey = &kTPPlayerInitKey;
 %hook IGFNFVideoPlayer
 
 - (void)playWithReason:(long long)reason callsiteContext:(id)context {
+    BOOL may = TPPlayerMayPlay(self, reason);
+    // 自動播放不直接擋掉：讓 Threads 照常走完播放流程（介面、喇叭圖示都正常），只按住底層播放器
+    if ([TPPrefs boolForKey:TPKeyNoAutoplay]) TPSetHeld(self, !may);
     // 每個播放器第一次播放時，套用預設倍速
     if (!objc_getAssociatedObject(self, kTPPlayerInitKey)) {
         objc_setAssociatedObject(self, kTPPlayerInitKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         float sp = TPSpeedForIndex([TPPrefs integerForKey:TPKeyPlaySpeed]);
         if (sp != 1.0f) [(id)self setPlaybackSpeed:sp];
     }
+    %orig;
+}
+
+// 播放器被停止（滑走、cell 重用）：下次又要你點一下才播放
+- (void)stopWithReason:(long long)reason callsiteContext:(id)context {
+    objc_setAssociatedObject(self, kTPUserStartedKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if (objc_getAssociatedObject(self, kTPHeldKey)) TPSetHeld(self, NO);
     %orig;
 }
 
@@ -1137,6 +1265,53 @@ static const void *kTPPlayerInitKey = &kTPPlayerInitKey;
     %orig(speed);
 }
 
+%end
+
+// 被按住的影片：Threads 內部要底層播放器開始播放時直接忽略，等你點了才放開
+// 第一次：靜音試播，讓 Threads 跑到「開始播放」顯示聲音圖示，接著在第一格停住；之後的播放一律忽略
+static BOOL TPFNFShouldSkipPlay(id fnf) {
+    if (!objc_getAssociatedObject(fnf, kTPHeldKey)) return NO;
+    if (objc_getAssociatedObject(fnf, kTPPrimedKey)) return YES;
+    objc_setAssociatedObject(fnf, kTPPrimedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if ([fnf respondsToSelector:@selector(setVolume:rampTime:)]) [fnf setVolume:0 rampTime:0];
+    return NO;
+}
+
+%hook FNFPlayer
+- (void)play {
+    if (TPFNFShouldSkipPlay(self)) return;
+    %orig;
+}
+- (void)playWithContext:(id)context {
+    if (TPFNFShouldSkipPlay(self)) return;
+    %orig;
+}
+%end
+
+// 記錄「點擊」：手指放開時移動很少、時間很短才算點擊（滑動不算），只在停用自動播放時才計算
+%hook UIWindow
+- (void)sendEvent:(UIEvent *)event {
+    if (event.type == UIEventTypeTouches && [TPPrefs boolForKey:TPKeyNoAutoplay]) {
+        for (UITouch *t in event.allTouches) {
+            if (t.phase == UITouchPhaseBegan) {
+                CGPoint p = [t locationInView:nil];
+                objc_setAssociatedObject(t, kTPTouchStartKey,
+                    @[@(p.x), @(p.y), @(CFAbsoluteTimeGetCurrent())], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            } else if (t.phase == UITouchPhaseEnded) {
+                NSArray *s = objc_getAssociatedObject(t, kTPTouchStartKey);
+                if (s.count == 3) {
+                    CGPoint p = [t locationInView:nil];
+                    CGFloat dx = p.x - [s[0] doubleValue], dy = p.y - [s[1] doubleValue];
+                    if (dx * dx + dy * dy < 15 * 15 && CFAbsoluteTimeGetCurrent() - [s[2] doubleValue] < 0.6) {
+                        gTPLastTapAt = CFAbsoluteTimeGetCurrent();
+                        TPPlayVideoAtTouch(t);
+                    }
+                }
+            }
+        }
+    }
+    %orig;
+}
 %end
 
 %end // group VideoSettings
@@ -1509,22 +1684,27 @@ static const void *kTPGestureKey3 = &kTPGestureKey3;
 
 %group Menu
 
-// 入口 A：Threads「設定」頁右上角加上「〰 Pulse」按鈕（珊瑚色，與插件設定頁一致）
+// 入口 A：Threads「設定」頁右上角加上「〰 Pulse」按鈕（主題色，與插件設定頁一致）
 static NSString *const kTPEntryID = @"ThreadsPulseEntry";
+
+static void TPTintEntryButton(UIButton *b) {
+    if (![b isKindOfClass:[UIButton class]] || !b.configuration) return;
+    UIButtonConfiguration *cfg = b.configuration;
+    cfg.baseForegroundColor = [TPUI accentIcon];
+    b.configuration = cfg;
+}
 
 %hook _TtC11BCNSettings25BCNSettingsViewController
 - (void)viewDidAppear:(BOOL)animated {
     %orig;
     UIViewController *vc = (UIViewController *)self;
     NSMutableArray *items = [vc.navigationItem.rightBarButtonItems mutableCopy] ?: [NSMutableArray array];
-    for (UIBarButtonItem *i in items) if ([i.customView.accessibilityIdentifier isEqualToString:kTPEntryID]) return;
+    for (UIBarButtonItem *i in items) if ([i.customView.accessibilityIdentifier isEqualToString:kTPEntryID]) {
+        TPTintEntryButton((UIButton *)i.customView);          // 已經有了：換成目前的主題色
+        return;
+    }
 
-    // 珊瑚色：深色模式稍亮、淺色模式稍深（與設定頁圖示同色）
-    UIColor *coral = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *t) {
-        return t.userInterfaceStyle == UIUserInterfaceStyleDark
-            ? [UIColor colorWithRed:0xF0/255.0 green:0x99/255.0 blue:0x7B/255.0 alpha:1]
-            : [UIColor colorWithRed:0xC4/255.0 green:0x4F/255.0 blue:0x28/255.0 alpha:1];
-    }];
+    UIColor *coral = [TPUI accentIcon];   // 主題色（與設定頁圖示同色）
     UIButtonConfiguration *cfg = [UIButtonConfiguration plainButtonConfiguration];
     cfg.title = @"Pulse";
     cfg.image = [UIImage systemImageNamed:@"waveform.path.ecg"
@@ -1544,6 +1724,12 @@ static NSString *const kTPEntryID = @"ThreadsPulseEntry";
     b.accessibilityIdentifier = kTPEntryID;
     b.accessibilityLabel = @"ThreadsPulse";
     [b sizeToFit];
+    // 在插件設定頁換主題時，入口按鈕馬上跟著變色
+    __weak UIButton *wb = b;
+    [[NSNotificationCenter defaultCenter] addObserverForName:TPThemeDidChangeNotification object:nil
+                                                       queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *n) {
+        if (wb) TPTintEntryButton(wb);
+    }];
     [items addObject:[[UIBarButtonItem alloc] initWithCustomView:b]];
     vc.navigationItem.rightBarButtonItems = items;
 }
@@ -1917,6 +2103,10 @@ static void TPMarkLegacyTabTap(void) {
     gTPTabTapAt = CFAbsoluteTimeGetCurrent();
 }
 
+/// 長按首頁標籤開啟設定後，手指放開時不要再當成點了首頁（避免捲回頂端／重新整理）
+static CFAbsoluteTime gTPSuppressTabSelectUntil = 0;
+static BOOL TPTabSelectSuppressed(void) { return CFAbsoluteTimeGetCurrent() < gTPSuppressTabSelectUntil; }
+
 %group HomeFeedControls
 
 %hook _TtC21BCNRootViewController25BCNLegacyTabBarController
@@ -1926,15 +2116,16 @@ static void TPMarkLegacyTabTap(void) {
 
 %hook _TtC26BCNLucentTabBarCoordinator26BCNLucentTabBarCoordinator
 - (BOOL)tabBarController:(id)controller shouldSelectTab:(id)tab {
+    if (TPTabSelectSuppressed()) return NO;
     if (tab && tab == TPSelectedTab(controller) && TPShouldBlockHomeReselect()) return NO;
     return %orig;
 }
 - (void)tabBarController:(id)controller didSelectTab:(id)tab previousTab:(id)prev {
-    if (tab && tab == prev && TPShouldBlockHomeReselect()) return;
+    if (tab && tab == prev && (TPTabSelectSuppressed() || TPShouldBlockHomeReselect())) return;
     %orig;
 }
 - (void)handleTabBarDoubleTap:(id)tap {
-    if (TPShouldBlockHomeReselect()) return;
+    if (TPTabSelectSuppressed() || TPShouldBlockHomeReselect()) return;
     %orig;
 }
 %end
@@ -2032,6 +2223,315 @@ static BOOL TPTreeContainsUserRecs(UIViewController *vc, int depth) {
 
 %end // group PinTabBar
 
+#pragma mark - 16) 隱藏動態裡的推薦帳號卡片
+
+// 動態裡的推薦都是 IGListKit 的區塊，讓區塊的項目數變成 0 就不會顯示
+//   BCNVerticalsSuggestionUnit   ：動態中的「推薦追蹤」橫向卡片
+//   BCNInterestFeedSuggestedUnit ：推薦的主題動態／帳號組合
+//   BCNSuggestedUser             ：追蹤某人後跳出的推薦（只擋這個情境，surface = followChaining）
+//   BCNProfileChainingView       ：個人檔案頁的「為你推薦」（見下方）
+%group HideFeedSuggestions
+
+%hook _TtC26BCNVerticalsSuggestionUnit43BCNVerticalsSuggestionUnitSectionController
+- (long long)numberOfItems { return [TPPrefs boolForKey:TPKeyHideFeedSuggest] ? 0 : %orig; }
+%end
+
+%hook _TtC28BCNInterestFeedSuggestedUnit45BCNInterestFeedSuggestedUnitSectionController
+- (long long)numberOfItems { return [TPPrefs boolForKey:TPKeyHideFeedSuggest] ? 0 : %orig; }
+%end
+
+%hook _TtC16BCNSuggestedUser33BCNSuggestedUserSectionController
+- (long long)numberOfItems {
+    if ([TPPrefs boolForKey:TPKeyHideFeedSuggest]) {
+        uint8_t *surface = TPIvarAddress(self, "surface");     // 0 提及的使用者、1 追蹤後的推薦、2 社群推薦
+        if (surface && *surface == 1) return 0;
+    }
+    return %orig;
+}
+%end
+
+// 個人檔案頁的「為你推薦」：自己的個人檔案（新帳號常見），以及在別人個人檔案按追蹤後出現的推薦
+// 由 BCNProfileHeaderView 的 showProfileChain 決定要不要顯示 BCNProfileChainingView
+%hook _TtC10BCNProfile20BCNProfileHeaderView
+- (CGSize)sizeThatFits:(CGSize)fits {
+    if ([TPPrefs boolForKey:TPKeyHideFeedSuggest]) {
+        uint8_t *show = TPIvarAddress(self, "showProfileChain");
+        if (show) *show = 0;                                   // 計算高度時不保留推薦區的空間
+    }
+    return %orig;
+}
+- (void)layoutSubviews {
+    if ([TPPrefs boolForKey:TPKeyHideFeedSuggest]) {
+        uint8_t *show = TPIvarAddress(self, "showProfileChain");
+        if (show) *show = 0;
+    }
+    %orig;
+}
+%end
+
+%hook _TtC18BCNProfileChaining22BCNProfileChainingView
+- (CGSize)sizeThatFits:(CGSize)fits {
+    if ([TPPrefs boolForKey:TPKeyHideFeedSuggest]) return CGSizeMake(fits.width, 0);
+    return %orig;
+}
+- (void)layoutSubviews {
+    %orig;
+    ((UIView *)self).hidden = [TPPrefs boolForKey:TPKeyHideFeedSuggest];
+}
+%end
+
+%end // group HideFeedSuggestions
+
+#pragma mark - 17) 停用截圖偵測
+
+// Threads 透過 IGScreenshotObserver 得知使用者截圖或錄影（會記錄、跳出分享提示等）
+%group BlockScreenshotDetection
+
+%hook IGScreenshotObserver
+- (void)_onTakenScreenshot {
+    if ([TPPrefs boolForKey:TPKeyBlockScreenshotDetect]) { TPDebug(TPL(@"Screenshot detection blocked")); return; }
+    %orig;
+}
+- (void)_screenCaptureStateDidChange:(id)change {
+    if ([TPPrefs boolForKey:TPKeyBlockScreenshotDetect]) return;
+    %orig;
+}
+%end
+
+%end // group BlockScreenshotDetection
+
+#pragma mark - 18) 阻擋分析回傳
+
+// Threads 的使用紀錄（看了什麼、停留多久、點了什麼、效能數據）都經過 FBAnalyticsCoreLogger 收集，
+// 再由 IGAnalyticsNetworkConfigurator 打包上傳。開關打開時：
+//   1. 新的紀錄在收集階段就丟掉（不存檔、不即時串流）
+//   2. 之前存著還沒傳的紀錄，上傳時改用 Meta 自己的 FBAnalyticsNoOpNetworkConfigurator（不發出網路要求）
+// 登入、發文、載入動態等正常的 API 不經過這裡，不受影響。
+static int gTPAnalyticsDropped;
+
+%group BlockAnalytics
+
+%hook FBAnalyticsCoreLogger
+- (void)_captureAnalyticsEvent:(id)event {
+    if ([TPPrefs boolForKey:TPKeyBlockAnalytics]) { __sync_fetch_and_add(&gTPAnalyticsDropped, 1); return; }
+    %orig;
+}
+- (BOOL)_captureAnalyticsEventForBatchUpload:(id)event {   // 備援：萬一有路徑直接進批次上傳
+    if ([TPPrefs boolForKey:TPKeyBlockAnalytics]) return YES;  // 當作已處理，不存進待上傳的檔案
+    return %orig;
+}
+- (BOOL)_shouldStreamEvent:(id)event {
+    if ([TPPrefs boolForKey:TPKeyBlockAnalytics]) return NO;
+    return %orig;
+}
+%end
+
+%end // group BlockAnalytics
+
+// 上傳：參數是大型結構（arm64 以指標傳遞），所以用 (id, SEL, id, void *) 原封不動轉交
+typedef BOOL (*TPPerformIMP)(id, SEL, id, void *);
+static TPPerformIMP orig_TPAnalyticsPerform, noop_TPAnalyticsPerform;
+static BOOL tp_AnalyticsPerform(id self, SEL _cmd, id context, void *requestContext) {
+    if (noop_TPAnalyticsPerform && [TPPrefs boolForKey:TPKeyBlockAnalytics])
+        return noop_TPAnalyticsPerform(self, _cmd, context, requestContext);
+    return orig_TPAnalyticsPerform(self, _cmd, context, requestContext);
+}
+
+static void TPInstallAnalyticsUploadBlock(void) {
+    SEL sel = NSSelectorFromString(@"performRequestWithContext:requestContext:");
+    Class noop = objc_getClass("FBAnalyticsNoOpNetworkConfigurator");
+    Class real = objc_getClass("IGAnalyticsNetworkConfigurator");
+    Method nm = noop ? class_getInstanceMethod(noop, sel) : NULL;
+    Method rm = real ? class_getInstanceMethod(real, sel) : NULL;
+    if (!nm || !rm || method_getImplementation(nm) == method_getImplementation(rm)) return;
+    // 兩邊型別簽章一致才換，避免 Threads 改版後參數不同
+    if (strcmp(method_getTypeEncoding(nm), method_getTypeEncoding(rm)) != 0) return;
+    noop_TPAnalyticsPerform = (TPPerformIMP)method_getImplementation(nm);
+    orig_TPAnalyticsPerform = (TPPerformIMP)method_setImplementation(rm, (IMP)tp_AnalyticsPerform);
+}
+
+#pragma mark - 19) 使用外部瀏覽器開啟連結
+
+/// 要交給外部瀏覽器的網址；Threads 自己的連結或非網頁連結回傳 nil（照原本在 App 裡開）
+static NSURL *TPExternalBrowserURL(id url) {
+    if (![TPPrefs boolForKey:TPKeyExternalBrowser] || ![url isKindOfClass:[NSURL class]]) return nil;
+    NSURL *target = url;
+    NSURLComponents *c = [NSURLComponents componentsWithURL:target resolvingAgainstBaseURL:NO];
+    if (c && [TPURLCleaner isRedirectHost:c.host]) {             // 先解開 l.threads.com 跳轉包裝，才看得出真正目的地
+        for (NSURLQueryItem *q in c.queryItems)
+            if ([q.name isEqualToString:@"u"] && q.value.length) { NSURL *inner = [NSURL URLWithString:q.value]; if (inner) target = inner; break; }
+    }
+    NSString *scheme = target.scheme.lowercaseString;
+    if (![scheme isEqualToString:@"http"] && ![scheme isEqualToString:@"https"]) return nil;
+    NSString *host = target.host.lowercaseString ?: @"";
+    for (NSString *own in @[@"threads.net", @"threads.com"])
+        if ([host isEqualToString:own] || [host hasSuffix:[@"." stringByAppendingString:own]]) return nil;
+    return [TPURLCleaner cleanURL:target];
+}
+
+static BOOL TPOpenExternally(id url) {
+    NSURL *target = TPExternalBrowserURL(url);
+    if (!target) return NO;
+    [[UIApplication sharedApplication] openURL:target options:@{} completionHandler:nil];
+    return YES;
+}
+
+%group ExternalBrowser
+
+// 串文、個人簡介等處點連結都會經過 BCNLinkHandler（ObjC 協定，所以呼叫走 ObjC 派送）
+%hook _TtC20BCNLinkHandlerPlugin18BCNLinkHandlerImpl
+- (void)handleLinkWithURL:(id)url containerModule:(id)module presenter:(id)presenter {
+    if (TPOpenExternally(url)) return;
+    %orig;
+}
+- (void)handleLinkWithURL:(id)url rawURL:(id)rawURL linkProtectionMetadata:(id)metadata mediaPk:(id)pk mediaAuthorPk:(id)authorPk linkTapLocation:(long long)location containerModule:(id)module sponsoredPostInfo:(id)info rankingInfoToken:(id)token presenter:(id)presenter contextualLoggingParameters:(id)parameters clickSource:(unsigned long long)source animationViewProvider:(id)provider {
+    if (TPOpenExternally(url)) return;
+    %orig;
+}
+%end
+
+%end // group ExternalBrowser
+
+#pragma mark - 20) 隱藏個人檔案的 Instagram 按鈕
+
+// 個人檔案上方的 Instagram 按鈕是 BCNProfileViewController 的 appSwitcherButton（點了切換到 Instagram）
+static const void *kTPHiddenIGViewKey = &kTPHiddenIGViewKey;
+
+/// 按鈕外面常包著一層只放它的容器（例如毛玻璃圓底），要把整個容器藏起來，旁邊的按鈕才會靠攏
+static UIView *TPIGButtonSlot(UIView *button) {
+    UIView *v = button;
+    while (v.superview && ![v.superview isKindOfClass:[UIStackView class]] && v.superview.subviews.count == 1) v = v.superview;
+    return v;
+}
+
+static const void *kTPShiftedViewsKey = &kTPShiftedViewsKey;
+
+static void TPResetShifted(UIViewController *vc) {
+    for (TPWeakBox *box in (NSArray *)objc_getAssociatedObject(vc, kTPShiftedViewsKey)) {
+        UIView *v = box.object;
+        if (v) v.transform = CGAffineTransformIdentity;
+    }
+    objc_setAssociatedObject(vc, kTPShiftedViewsKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+static void TPApplyHideIGButton(UIViewController *vc) {
+    BOOL on = [TPPrefs boolForKey:TPKeyHideIGButton];
+    UIView *hidden = ((TPWeakBox *)objc_getAssociatedObject(vc, kTPHiddenIGViewKey)).object;
+    if (!on) {                                                   // 關掉開關：還原
+        if (hidden) { hidden.hidden = NO; objc_setAssociatedObject(vc, kTPHiddenIGViewKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+        TPResetShifted(vc);
+        return;
+    }
+    Ivar iv = class_getInstanceVariable(object_getClass(vc), "$__lazy_storage_$_appSwitcherButton");
+    UIView *button = iv ? object_getIvar(vc, iv) : nil;
+    if (![button isKindOfClass:[UIView class]] || !button.superview) return;
+    UIView *slot = TPIGButtonSlot(button);
+    slot.hidden = YES;
+    TPWeakBox *box = [TPWeakBox new];
+    box.object = slot;
+    objc_setAssociatedObject(vc, kTPHiddenIGViewKey, box, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if ([slot.superview isKindOfClass:[UIStackView class]]) return;   // 在 stack view 裡：隱藏後會自動靠攏
+
+    // 不在 stack view（Threads 自己算座標）：把同一排的其他按鈕往空位移過去
+    TPResetShifted(vc);
+    CGRect f = slot.frame;
+    NSMutableArray<UIView *> *left = [NSMutableArray array], *right = [NSMutableArray array];
+    CGFloat leftEdge = -CGFLOAT_MAX, rightEdge = CGFLOAT_MAX;
+    for (UIView *v in slot.superview.subviews) {
+        if (v == slot || v.hidden || v.alpha < 0.01) continue;
+        CGRect g = v.frame;
+        if (g.size.width > 100 || g.size.height > 100) continue;                 // 只動按鈕大小的東西，標題等不碰
+        if (CGRectGetMaxY(g) <= CGRectGetMinY(f) || CGRectGetMinY(g) >= CGRectGetMaxY(f)) continue;   // 不同一排
+        if (CGRectGetMaxX(g) <= CGRectGetMinX(f) + 1) { [left addObject:v]; leftEdge = MAX(leftEdge, CGRectGetMaxX(g)); }
+        else if (CGRectGetMinX(g) >= CGRectGetMaxX(f) - 1) { [right addObject:v]; rightEdge = MIN(rightEdge, CGRectGetMinX(g)); }
+    }
+    NSArray *movers; CGFloat dx;
+    if (left.count) { movers = left; dx = CGRectGetMaxX(f) - leftEdge; }        // 靠右的一排：左邊的往右補
+    else if (right.count) { movers = right; dx = CGRectGetMinX(f) - rightEdge; } // 靠左的一排：右邊的往左補
+    else return;
+    NSMutableArray *boxes = [NSMutableArray array];
+    for (UIView *v in movers) {
+        v.transform = CGAffineTransformMakeTranslation(dx, 0);
+        TPWeakBox *b = [TPWeakBox new]; b.object = v; [boxes addObject:b];
+    }
+    objc_setAssociatedObject(vc, kTPShiftedViewsKey, boxes, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+%group HideIGButton
+
+%hook _TtC10BCNProfile24BCNProfileViewController
+- (void)viewDidLayoutSubviews {
+    %orig;
+    TPApplyHideIGButton((UIViewController *)self);
+}
+%end
+
+%end // group HideIGButton
+
+#pragma mark - 21) 長按首頁標籤開啟設定
+
+/// 底部標籤列上的各個標籤按鈕（依 x 座標排好）
+static void TPCollectTabButtons(UIView *v, NSMutableArray<UIView *> *out, int depth) {
+    if (depth > 8) return;
+    for (UIView *s in v.subviews) {
+        NSString *cls = NSStringFromClass([s class]);
+        if (!s.hidden && s.alpha > 0.01 && ([cls containsString:@"TabButton"] || [cls containsString:@"TabBarButton"])) [out addObject:s];
+        else TPCollectTabButtons(s, out, depth + 1);
+    }
+}
+
+/// 這次長按是不是按在「首頁」標籤（最左邊那個；從右到左的語系是最右邊）上
+static BOOL TPIsHomeTabPress(UIGestureRecognizer *g) {
+    UIView *bar = g.view;
+    if (!bar) return NO;
+    CGPoint p = [g locationInView:bar];
+    BOOL rtl = bar.effectiveUserInterfaceLayoutDirection == UIUserInterfaceLayoutDirectionRightToLeft;
+    NSMutableArray<UIView *> *buttons = [NSMutableArray array];
+    TPCollectTabButtons(bar, buttons, 0);
+    if (buttons.count >= 2) {
+        [buttons sortUsingComparator:^NSComparisonResult(UIView *a, UIView *b) {
+            CGFloat ax = [a convertPoint:CGPointZero toView:bar].x, bx = [b convertPoint:CGPointZero toView:bar].x;
+            return ax < bx ? NSOrderedAscending : ax > bx ? NSOrderedDescending : NSOrderedSame;
+        }];
+        UIView *home = rtl ? buttons.lastObject : buttons.firstObject;
+        CGRect f = [home convertRect:home.bounds toView:bar];
+        return p.x >= CGRectGetMinX(f) && p.x <= CGRectGetMaxX(f);
+    }
+    // 找不到標籤按鈕：把標籤列平均分成幾格估算
+    NSUInteger n = [bar isKindOfClass:[UITabBar class]] && ((UITabBar *)bar).items.count ? ((UITabBar *)bar).items.count : 5;
+    CGFloat cell = bar.bounds.size.width / n;
+    return rtl ? p.x >= bar.bounds.size.width - cell : p.x <= cell;
+}
+
+static const void *kTPHomePressKey = &kTPHomePressKey;
+
+%group HomeLongPress
+
+// Threads 長按標籤列的處理（例如長按個人檔案切換帳號）都經過這裡；只攔首頁標籤，其他標籤照常
+%hook _TtC26BCNLucentTabBarCoordinator26BCNLucentTabBarCoordinator
+- (void)handleTabBarLongPress:(UIGestureRecognizer *)press {
+    if (![TPPrefs boolForKey:TPKeyHomeLongPress] || ![press isKindOfClass:[UIGestureRecognizer class]]) { %orig; return; }
+    if (press.state == UIGestureRecognizerStateBegan) {
+        BOOL home = TPIsHomeTabPress(press);
+        objc_setAssociatedObject(press, kTPHomePressKey, home ? @YES : nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        if (!home) { %orig; return; }
+        gTPSuppressTabSelectUntil = CFAbsoluteTimeGetCurrent() + 10;   // 手指還按著：之後的「點選」都不算（最多 10 秒，避免卡住）
+        [TPUI hapticLight];
+        [TPSettingsViewController present];
+        return;
+    }
+    BOOL mine = objc_getAssociatedObject(press, kTPHomePressKey) != nil;
+    if (press.state == UIGestureRecognizerStateEnded || press.state == UIGestureRecognizerStateCancelled
+        || press.state == UIGestureRecognizerStateFailed) {
+        objc_setAssociatedObject(press, kTPHomePressKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        if (mine) gTPSuppressTabSelectUntil = CFAbsoluteTimeGetCurrent() + 0.6;   // 放開後再擋一下下
+    }
+    if (!mine) %orig;
+}
+%end
+
+%end // group HomeLongPress
+
 #pragma mark - 初始化
 
 %ctor {
@@ -2053,6 +2553,13 @@ static BOOL TPTreeContainsUserRecs(UIViewController *vc, int depth) {
         gTPUserRecsClass = objc_getClass("_TtC22BCNUserRecommendations36BCNUserRecommendationsViewController");
         %init(HideFollowSuggest);
         %init(PinTabBar);
+        %init(HideFeedSuggestions);
+        %init(BlockScreenshotDetection);
+        %init(BlockAnalytics);
+        TPInstallAnalyticsUploadBlock();
+        %init(ExternalBrowser);
+        %init(HideIGButton);
+        %init(HomeLongPress);
         %init(Menu);
 
         // 記錄進入背景的時間（保留首頁動態位置用）
@@ -2060,6 +2567,8 @@ static BOOL TPTreeContainsUserRecs(UIViewController *vc, int depth) {
                                                           object:nil queue:NSOperationQueue.mainQueue
                                                       usingBlock:^(NSNotification *n) {
             gTPBackgroundedAt = CFAbsoluteTimeGetCurrent();
+            [[NSUserDefaults standardUserDefaults] setObject:TPSideloadFixStats() forKey:@"tp_sf_last_stats"];
+            [[NSUserDefaults standardUserDefaults] setInteger:gTPAnalyticsDropped forKey:@"tp_analytics_last_dropped"];
         }];
 
         // 回到 Threads 時檢查剪貼簿裡有沒有連結（稍等一下，讓畫面先就緒）
@@ -2076,7 +2585,14 @@ static BOOL TPTreeContainsUserRecs(UIViewController *vc, int depth) {
                                                           object:nil queue:NSOperationQueue.mainQueue
                                                       usingBlock:^(NSNotification *n) {
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                TPDebug([NSString stringWithFormat:@"%@: %@", TPL(@"Sideload Compatibility Fix"), TPSideloadFixStatus()]);
+                // 顯示這次的狀態，以及上次使用期間（進背景前）鑰匙圈的統計
+                NSString *last = [[NSUserDefaults standardUserDefaults] stringForKey:@"tp_sf_last_stats"];
+                NSString *msg = [NSString stringWithFormat:@"%@: %@", TPL(@"Sideload Compatibility Fix"), TPSideloadFixStatus()];
+                if (last.length) msg = [msg stringByAppendingFormat:@"\n%@: %@", TPL(@"Last session"), last];
+                if ([TPPrefs boolForKey:TPKeyBlockAnalytics])
+                    msg = [msg stringByAppendingFormat:@"\n%@: %ld", TPL(@"Analytics blocked last session"),
+                           (long)[[NSUserDefaults standardUserDefaults] integerForKey:@"tp_analytics_last_dropped"]];
+                if ([TPPrefs boolForKey:TPKeyDebugToast]) [TPHUD toast:[@"[TP] " stringByAppendingString:msg]];
             });
         }];
 

@@ -31,17 +31,12 @@ static UIColor *TPHairlineColor(void) {
 static UIColor *TPKofiColor(void) {
     return [UIColor colorWithRed:1.00 green:0.37 blue:0.36 alpha:1];
 }
-/// 主題色：珊瑚色（開關、分段選中、完成按鈕、操作文字）
-static UIColor *TPAccent(void) {
-    return [UIColor colorWithRed:0xD8/255.0 green:0x5A/255.0 blue:0x30/255.0 alpha:1];
-}
-/// 圖示用的珊瑚色：深色模式稍亮，淺色模式稍深，兩邊都清楚
-static UIColor *TPAccentIcon(void) {
-    return TPDyn([UIColor colorWithRed:0xC4/255.0 green:0x4F/255.0 blue:0x28/255.0 alpha:1],
-                 [UIColor colorWithRed:0xF0/255.0 green:0x99/255.0 blue:0x7B/255.0 alpha:1]);
-}
+/// 主題色（開關、分段選中、完成按鈕、操作文字），依「主題配色」設定
+static UIColor *TPAccent(void) { return [TPUI accent]; }
+/// 圖示用的主題色：深色模式稍亮，淺色模式稍深，兩邊都清楚
+static UIColor *TPAccentIcon(void) { return [TPUI accentIcon]; }
 
-/// 灰色細線條圖示（不再用彩色方塊）
+/// 細線條圖示（顏色由主題色決定）
 static UIImage *TPLineIcon(NSString *symbol) {
     UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:17 weight:UIImageSymbolWeightRegular];
     return [UIImage systemImageNamed:symbol withConfiguration:cfg] ?: [UIImage systemImageNamed:@"circle" withConfiguration:cfg];
@@ -83,58 +78,89 @@ static NSString *TPTimePreview(NSInteger mode) {
     return [NSString stringWithFormat:TPL(@"Example: %@"), text];
 }
 
-#pragma mark - 頂部標題區
+#pragma mark - 頂部狀態卡
 
+/// 最上方的狀態卡：Pulse 圖示、版本號、運作中・已開啟幾項功能
 @interface TPSettingsHeaderView : UIView
+- (void)setEnabledCount:(NSInteger)count;
 @end
 
 @implementation TPSettingsHeaderView {
+    UIView *_card;
+    CAGradientLayer *_gradient;
     UIView *_badge;
     UIImageView *_glyph;
     UILabel *_title;
     UILabel *_subtitle;
+    UIView *_dot;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
     if ((self = [super initWithFrame:frame])) {
+        UIColor *accent = TPAccent();
+        _card = [UIView new];
+        _card.layer.cornerRadius = 18;
+        _card.layer.cornerCurve = kCACornerCurveContinuous;
+        _card.layer.borderWidth = 1;
+        _card.layer.borderColor = [accent colorWithAlphaComponent:0.35].CGColor;
+        _card.clipsToBounds = YES;
+        _gradient = [CAGradientLayer layer];
+        _gradient.colors = @[(id)[accent colorWithAlphaComponent:0.28].CGColor, (id)[accent colorWithAlphaComponent:0.07].CGColor];
+        _gradient.startPoint = CGPointMake(0, 0);
+        _gradient.endPoint = CGPointMake(1, 1);
+        [_card.layer addSublayer:_gradient];
+        [self addSubview:_card];
+
         _badge = [UIView new];
-        _badge.backgroundColor = UIColor.labelColor;
+        _badge.backgroundColor = accent;
         _badge.layer.cornerRadius = 12;
         _badge.layer.cornerCurve = kCACornerCurveContinuous;
-        [self addSubview:_badge];
+        [_card addSubview:_badge];
 
         _glyph = [[UIImageView alloc] initWithImage:
-                  [UIImage systemImageNamed:@"at"
-                          withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:22 weight:UIImageSymbolWeightSemibold]]];
-        _glyph.tintColor = UIColor.systemBackgroundColor;
+                  [UIImage systemImageNamed:@"waveform.path.ecg"
+                          withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:21 weight:UIImageSymbolWeightSemibold]]];
+        _glyph.tintColor = UIColor.whiteColor;
         _glyph.contentMode = UIViewContentModeCenter;
         [_badge addSubview:_glyph];
 
         _title = [UILabel new];
-        _title.font = [UIFont systemFontOfSize:22 weight:UIFontWeightBold];
-        _title.textColor = UIColor.labelColor;
-        _title.text = @"ThreadsPulse";
-        [self addSubview:_title];
+        NSMutableAttributedString *t = [[NSMutableAttributedString alloc] initWithString:@"ThreadsPulse"
+            attributes:@{ NSFontAttributeName: [UIFont systemFontOfSize:18 weight:UIFontWeightBold], NSForegroundColorAttributeName: UIColor.labelColor }];
+        [t appendAttributedString:[[NSAttributedString alloc] initWithString:[@"  " stringByAppendingString:TP_VERSION]
+            attributes:@{ NSFontAttributeName: [UIFont systemFontOfSize:13 weight:UIFontWeightMedium], NSForegroundColorAttributeName: TPAccentIcon() }]];
+        _title.attributedText = t;
+        [_card addSubview:_title];
+
+        _dot = [UIView new];
+        _dot.backgroundColor = UIColor.systemGreenColor;
+        _dot.layer.cornerRadius = 3.5;
+        [_card addSubview:_dot];
 
         _subtitle = [UILabel new];
         _subtitle.font = [UIFont systemFontOfSize:13 weight:UIFontWeightRegular];
         _subtitle.textColor = UIColor.secondaryLabelColor;
-        _subtitle.text = [NSString stringWithFormat:@"%@  ·  %@",
-                          [NSString stringWithFormat:TPL(@"Version %@"), TP_VERSION], TPL(@"Enhancements for Threads")];
-        [self addSubview:_subtitle];
+        [_card addSubview:_subtitle];
     }
     return self;
 }
 
+- (void)setEnabledCount:(NSInteger)count {
+    _subtitle.text = [NSString stringWithFormat:TPL(@"Running · %ld features on"), (long)count];
+}
+
 - (void)layoutSubviews {
     [super layoutSubviews];
-    CGFloat w = self.bounds.size.width, inset = 20, d = 44;
-    CGFloat y = (self.bounds.size.height - d) / 2 + 4;
-    _badge.frame = CGRectMake(inset, y, d, d);
+    CGFloat w = self.bounds.size.width, inset = 16, d = 46;
+    _card.frame = CGRectMake(inset, 6, w - inset * 2, self.bounds.size.height - 12);
+    _gradient.frame = _card.bounds;
+    CGFloat h = _card.bounds.size.height;
+    _badge.frame = CGRectMake(14, (h - d) / 2, d, d);
     _glyph.frame = _badge.bounds;
-    CGFloat x = CGRectGetMaxX(_badge.frame) + 12;
-    _title.frame = CGRectMake(x, y - 1, w - x - inset, 26);
-    _subtitle.frame = CGRectMake(x, CGRectGetMaxY(_title.frame) + 1, w - x - inset, 18);
+    CGFloat x = CGRectGetMaxX(_badge.frame) + 12, tw = _card.bounds.size.width - x - 14;
+    _title.frame = CGRectMake(x, h / 2 - 23, tw, 24);
+    _dot.frame = CGRectMake(x, h / 2 + 8, 7, 7);
+    _subtitle.frame = CGRectMake(x + 13, h / 2 + 2, tw - 13, 18);
 }
 @end
 
@@ -146,6 +172,8 @@ static NSString *TPTimePreview(NSInteger mode) {
 @implementation TPSettingsViewController {
     NSArray<NSDictionary *> *_sections;
     CGFloat _headerWidth;
+    UIButton *_doneButton;
+    TPSettingsHeaderView *_header;
 }
 
 + (void)present {
@@ -171,8 +199,9 @@ static NSString *TPTimePreview(NSInteger mode) {
     [super viewDidLoad];
     self.navigationItem.title = nil;
     // 完成按鈕：明確指定顏色，不沿用 Threads 的全域色調（深色模式下是黑色，看不清楚）
-    // Threads 會用全域外觀改掉導覽列按鈕的顏色（淺色模式甚至看不見），所以自己畫：珊瑚色圓底＋白色勾勾，圖片固定顏色不受影響
+    // Threads 會用全域外觀改掉導覽列按鈕的顏色（淺色模式甚至看不見），所以自己畫：主題色圓底＋白色勾勾，圖片固定顏色不受影響
     UIButton *doneButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    _doneButton = doneButton;
     doneButton.frame = CGRectMake(0, 0, 32, 32);
     doneButton.backgroundColor = TPAccent();
     doneButton.layer.cornerRadius = 16;
@@ -198,110 +227,132 @@ static NSString *TPTimePreview(NSInteger mode) {
            @"rows": @[
                @{ @"type": @"switch", @"key": TPKeyBlockAds, @"title": @"Block Ads",
                   @"detail": @"Hide sponsored posts in the feed",
-                  @"icon": @"shield", @"color": UIColor.systemRedColor },
+                  @"icon": @"shield" },
+               @{ @"type": @"switch", @"key": TPKeyBlockScreenshotDetect, @"title": @"Block Screenshot Detection",
+                  @"detail": @"Threads won't know when you take a screenshot or record the screen",
+                  @"icon": @"camera.viewfinder" },
+               @{ @"type": @"switch", @"key": TPKeyBlockAnalytics, @"title": @"Block Analytics",
+                  @"detail": @"Stop Threads from sending usage data such as what you view, how long you stay and what you tap. Recommendations may become less accurate",
+                  @"icon": @"eye.slash" },
                @{ @"type": @"switch", @"key": TPKeyStripTracking, @"title": @"Remove URL Tracking",
                   @"detail": @"Automatically strip xmt, igshid, utm_* and more when copying, sharing or opening links",
-                  @"icon": @"link", @"color": UIColor.systemBlueColor },
-           ]},
-        @{ @"header": @"Clipboard Links",
-           @"footer": @"Auto-open reads the clipboard directly. If iOS asks to allow pasting every time, go to Settings › Threads › Paste from Other Apps and choose Allow.",
-           @"footerIf": @[@[TPKeyClipboardLinks, @1], @[TPKeyClipboardMode, @1]],
-           @"rows": @[
-               @{ @"type": @"switch", @"key": TPKeyClipboardLinks, @"title": @"Detect Copied Links",
-                  @"detail": @"When you come back or switch accounts, detect a copied Threads link and open it",
-                  @"icon": @"doc.on.clipboard", @"color": UIColor.labelColor },
-               @{ @"type": @"segment", @"key": TPKeyClipboardMode, @"title": @"When a Link Is Found", @"detail": @"",
-                  @"icon": @"hand.tap", @"color": UIColor.labelColor,
-                  @"segments": @[@"Ask", @"Auto-open"], @"showIf": @[TPKeyClipboardLinks, @1] },
-               @{ @"type": @"segment", @"key": TPKeyBannerPosition, @"title": @"Prompt Position", @"detail": @"",
-                  @"icon": @"rectangle.topthird.inset.filled", @"color": UIColor.labelColor,
-                  @"segments": @[@"Top", @"Middle", @"Bottom"], @"showIf": @[@[TPKeyClipboardLinks, @1], @[TPKeyClipboardMode, @0]] },
+                  @"icon": @"scissors" },
            ]},
         @{ @"header": @"Download",
            @"footer": @"If the original size isn't available, the regular size is downloaded.\nTo save a profile picture, long-press it on a profile, or open it full screen and tap ↓ in the bottom-right corner.",
            @"rows": @[
                @{ @"type": @"switch", @"key": TPKeyShowDownloadBtn, @"title": @"Download Button",
                   @"detail": @"Long-press: choose photos or videos only\nTap: download all photos and videos",
-                  @"icon": @"arrow.down.circle", @"color": UIColor.systemGreenColor },
+                  @"icon": @"arrow.down.circle" },
                @{ @"type": @"switch", @"key": TPKeyOriginalImage, @"title": @"Download Original Size",
-                  @"icon": @"photo", @"color": UIColor.systemTealColor },
+                  @"detail": @"Fetch the highest resolution from the web version",
+                  @"icon": @"photo" },
                @{ @"type": @"switch", @"key": TPKeyOriginalAvatar, @"title": @"Download Original Profile Pictures",
-                  @"icon": @"person.crop.circle", @"color": UIColor.labelColor },
+                  @"detail": @"Long-press a profile picture on a profile to save it",
+                  @"icon": @"person.crop.circle" },
+           ]},
+        @{ @"header": @"Video",
+           @"footer": @"Videos play at this speed by default, and return to it after you let go of a long-press 2x.",
+           @"rows": @[
+               @{ @"type": @"switch", @"key": TPKeyNoAutoplay, @"title": @"Disable Autoplay",
+                  @"detail": @"Videos in the feed won't play until you tap them",
+                  @"icon": @"play.slash" },
+               @{ @"type": @"segment", @"key": TPKeyPlaySpeed, @"title": @"Default Playback Speed", @"detail": @"",
+                  @"icon": @"speedometer",
+                  @"segments": @[@"1x", @"1.25x", @"1.5x", @"2x"] },
            ]},
         @{ @"header": @"Home Feed",
            @"footer": @"With everything here turned on, new posts only load after you fully close and reopen Threads.",
            @"rows": @[
                @{ @"type": @"switch", @"key": TPKeyKeepFeed, @"title": @"Keep Feed Position",
                   @"detail": @"Coming back from the background won't refresh the home feed, jump to the top or switch tabs",
-                  @"icon": @"pin", @"color": UIColor.labelColor },
+                  @"icon": @"pin" },
                @{ @"type": @"segment", @"key": TPKeyKeepFeedLimit, @"title": @"Keep For", @"detail": @"",
-                  @"icon": @"timer", @"color": UIColor.labelColor,
+                  @"icon": @"timer",
                   @"segments": @[@"10 min", @"30 min", @"No Limit"], @"showIf": @[TPKeyKeepFeed, @1],
                   @"note": @"If you're away longer than this, the feed refreshes as usual" },
                @{ @"type": @"switch", @"key": TPKeyNoPullRefresh, @"title": @"Disable Pull to Refresh",
                   @"detail": @"Pulling down at the top of the home feed won't refresh it, and the feed stops at the top without bouncing",
-                  @"icon": @"arrow.down.to.line", @"color": UIColor.labelColor },
-               @{ @"type": @"switch", @"key": TPKeyTabNoScrollTop, @"title": @"Home Tab: Don't Scroll to Top",
+                  @"icon": @"arrow.down.to.line" },
+               @{ @"type": @"caption", @"title": @"When Tapping the Home Tab" },
+               @{ @"type": @"switch", @"key": TPKeyTabNoScrollTop, @"title": @"Don't Scroll to Top",
                   @"detail": @"When you're scrolled down the home feed, tapping the Home tab won't jump back to the top, so you stay where you were",
-                  @"icon": @"arrow.up.to.line", @"color": UIColor.labelColor },
-               @{ @"type": @"switch", @"key": TPKeyTabNoRefresh, @"title": @"Home Tab: Don't Refresh",
+                  @"icon": @"arrow.up.to.line" },
+               @{ @"type": @"switch", @"key": TPKeyTabNoRefresh, @"title": @"Don't Refresh",
                   @"detail": @"When you're already at the top of the home feed, tapping the Home tab won't refresh or load new posts",
-                  @"icon": @"arrow.clockwise", @"color": UIColor.labelColor },
+                  @"icon": @"arrow.clockwise" },
            ]},
-        @{ @"header": @"Interface",
+        @{ @"header": @"Hidden Items",
            @"rows": @[
+               @{ @"type": @"switch", @"key": TPKeyHideFollowSuggest, @"title": @"Hide Follow Suggestions",
+                  @"detail": @"Stop the follow suggestions sheet from popping up",
+                  @"icon": @"person.crop.circle.badge.xmark" },
+               @{ @"type": @"switch", @"key": TPKeyHideIGButton, @"title": @"Hide Instagram Button",
+                  @"detail": @"Hide the Instagram button at the top of profiles",
+                  @"icon": @"minus.square" },
+               @{ @"type": @"switch", @"key": TPKeyHideFeedSuggest, @"title": @"Hide Suggested Accounts in Feed",
+                  @"detail": @"Hide suggested-account cards in the feed, and the \"Suggested for you\" section on profiles and after you follow someone",
+                  @"icon": @"person.badge.minus" },
+           ]},
+        @{ @"header": @"Links",
+           @"footer": @"Auto-open reads the clipboard directly. If iOS asks to allow pasting every time, go to Settings › Threads › Paste from Other Apps and choose Allow.",
+           @"footerIf": @[@[TPKeyClipboardLinks, @1], @[TPKeyClipboardMode, @1]],
+           @"rows": @[
+               @{ @"type": @"switch", @"key": TPKeyClipboardLinks, @"title": @"Detect Copied Links",
+                  @"detail": @"When you come back or switch accounts, detect a copied Threads link and open it",
+                  @"icon": @"doc.on.clipboard" },
+               @{ @"type": @"segment", @"key": TPKeyClipboardMode, @"title": @"When a Link Is Found", @"detail": @"",
+                  @"icon": @"hand.tap",
+                  @"segments": @[@"Ask", @"Auto-open"], @"showIf": @[TPKeyClipboardLinks, @1] },
+               @{ @"type": @"segment", @"key": TPKeyBannerPosition, @"title": @"Prompt Position", @"detail": @"",
+                  @"icon": @"rectangle.topthird.inset.filled",
+                  @"segments": @[@"Top", @"Middle", @"Bottom"], @"showIf": @[@[TPKeyClipboardLinks, @1], @[TPKeyClipboardMode, @0]] },
+               @{ @"type": @"switch", @"key": TPKeyExternalBrowser, @"title": @"Open Links in External Browser",
+                  @"detail": @"Links in posts and bios open in Safari (or your default browser) instead of the in-app browser. Threads links still open in the app",
+                  @"icon": @"safari" },
+           ]},
+        @{ @"header": @"Interface & Interactions",
+           @"rows": @[
+               @{ @"type": @"theme", @"title": @"Theme Color", @"icon": @"paintpalette" },
+               @{ @"type": @"switch", @"key": TPKeyConfirmLike, @"title": @"Like Confirmation",
+                  @"detail": @"Ask before a like is sent, to prevent accidental taps. Removing a like won't ask.",
+                  @"icon": @"heart" },
+               @{ @"type": @"segment", @"key": TPKeyExactTime, @"title": @"Post Time Format", @"detail": @"",
+                  @"icon": @"clock",
+                  @"segments": @[@"Relative", @"Date & Time", @"With Seconds"], @"preview": @"time" },
                @{ @"type": @"switch", @"key": TPKeyPinTabBar, @"title": @"Keep Tab Bar Visible",
                   @"detail": @"Scrolling won't hide the tab bar at the bottom; it always stays on screen",
-                  @"icon": @"dock.rectangle", @"color": UIColor.labelColor },
-               @{ @"type": @"switch", @"key": TPKeyHideFollowSuggest, @"title": @"Hide Follow Suggestions",
-                  @"detail": @"Stop the \"Suggested for you\" sheet from popping up",
-                  @"icon": @"person.badge.plus", @"color": UIColor.labelColor },
+                  @"icon": @"dock.rectangle" },
                @{ @"type": @"switch", @"key": TPKeyCopyProfile, @"title": @"Copy Profile Info",
                   @"detail": @"On a profile, long-press the name, username, bio or profile picture to copy the name, username or bio",
-                  @"icon": @"doc.on.doc", @"color": UIColor.labelColor },
-           ]},
-        @{ @"header": @"Video",
-           @"footer": @"Videos play at this speed by default, and return to it after you let go of a long-press 2x.",
-           @"rows": @[
-               @{ @"type": @"segment", @"key": TPKeyPlaySpeed, @"title": @"Default Playback Speed", @"detail": @"",
-                  @"icon": @"speedometer", @"color": UIColor.labelColor,
-                  @"segments": @[@"1x", @"1.25x", @"1.5x", @"2x"] },
-           ]},
-        @{ @"header": @"Interactions",
-           @"footer": @"Ask before a like is sent, to prevent accidental taps. Removing a like won't ask.",
-           @"rows": @[
-               @{ @"type": @"switch", @"key": TPKeyConfirmLike, @"title": @"Like Confirmation", @"detail": @"",
-                  @"icon": @"heart", @"color": UIColor.labelColor },
-           ]},
-        @{ @"header": @"Time",
-           @"rows": @[
-               @{ @"type": @"segment", @"key": TPKeyExactTime, @"title": @"Post Time Format", @"detail": @"",
-                  @"icon": @"clock", @"color": UIColor.labelColor,
-                  @"segments": @[@"Relative", @"Date & Time", @"With Seconds"], @"preview": @"time" },
+                  @"icon": @"doc.on.doc" },
+               @{ @"type": @"switch", @"key": TPKeyHomeLongPress, @"title": @"Long-Press Home Tab for Settings",
+                  @"detail": @"Long-pressing the Home tab at the bottom opens ThreadsPulse settings instead",
+                  @"icon": @"hand.point.up.left" },
            ]},
         @{ @"header": @"Backup",
            @"footer": @"Export your settings to a file, and import it after reinstalling or on another device.",
            @"rows": @[
                @{ @"type": @"action", @"action": @"export", @"title": @"Export Settings", @"detail": @"",
-                  @"icon": @"square.and.arrow.up", @"color": UIColor.systemCyanColor },
+                  @"icon": @"square.and.arrow.up" },
                @{ @"type": @"action", @"action": @"import", @"title": @"Import Settings", @"detail": @"",
-                  @"icon": @"square.and.arrow.down", @"color": UIColor.systemCyanColor },
+                  @"icon": @"square.and.arrow.down" },
            ]},
         @{ @"header": @"Advanced",
-           @"footer": @"Turn on when a feature stops working. Hints show which features are active, to help report problems.",
            @"rows": @[
+               @{ @"type": @"switch", @"key": TPKeyDebugToast, @"title": @"Debug Hints",
+                  @"detail": @"Turn on when a feature stops working. Hints show which features are active, to help report problems.",
+                  @"icon": @"ladybug" },
                @{ @"type": @"switch", @"key": TPKeySideloadFix, @"title": @"Sideload Compatibility Fix",
                   @"detail": @"Keeps you signed in and app group data working after re-signing. Only active on re-signed apps; takes effect after reopening Threads",
-                  @"icon": @"key", @"color": UIColor.labelColor },
-               @{ @"type": @"switch", @"key": TPKeyDebugToast, @"title": @"Debug Hints", @"detail": @"",
-                  @"icon": @"ladybug", @"color": UIColor.systemGrayColor },
+                  @"icon": @"key" },
            ]},
         @{ @"header": @"Donate",
            @"footer": @"Your support keeps ThreadsPulse updated. Thank you!",
            @"rows": @[
                @{ @"type": @"link", @"url": kTPDonateURL, @"title": @"Buy Me a Coffee",
                   @"detail": @"Support ThreadsPulse on Ko-fi",
-                  @"icon": @"cup.and.saucer.fill", @"color": UIColor.labelColor },
+                  @"icon": @"cup.and.saucer.fill" },
            ]},
     ];
     // TP_MODEL_END
@@ -312,11 +363,34 @@ static NSString *TPTimePreview(NSInteger mode) {
     CGFloat w = self.tableView.bounds.size.width;
     if (w > 0 && w != _headerWidth) {          // 寬度改變才重設，避免無限重排
         _headerWidth = w;
-        self.tableView.tableHeaderView = [[TPSettingsHeaderView alloc] initWithFrame:CGRectMake(0, 0, w, 84)];
+        _header = [[TPSettingsHeaderView alloc] initWithFrame:CGRectMake(0, 0, w, 92)];
+        [_header setEnabledCount:[self enabledFeatureCount]];
+        self.tableView.tableHeaderView = _header;
     }
 }
 
 - (void)close { [self dismissViewControllerAnimated:YES completion:nil]; }
+
+/// 已開啟的功能數（所有開關，不含「除錯提示」）
+- (NSInteger)enabledFeatureCount {
+    NSInteger n = 0;
+    for (NSDictionary *sec in _sections)
+        for (NSDictionary *row in sec[@"rows"])
+            if ([row[@"type"] isEqualToString:@"switch"] && ![row[@"key"] isEqualToString:TPKeyDebugToast]
+                && [TPPrefs boolForKey:row[@"key"]]) n++;
+    return n;
+}
+
+/// 換主題後：重畫狀態卡、完成按鈕和所有列
+- (void)applyTheme {
+    self.navigationController.navigationBar.tintColor = TPAccent();
+    self.navigationController.view.tintColor = TPAccent();
+    self.view.tintColor = TPAccent();
+    _doneButton.backgroundColor = TPAccent();
+    _headerWidth = 0;
+    [self.view setNeedsLayout];
+    [self.tableView reloadData];
+}
 
 #pragma mark - Table
 
@@ -374,6 +448,95 @@ static BOOL TPConditionUsesKey(NSArray *cond, NSString *key) {
             [self.tableView reloadSections:[NSIndexSet indexSetWithIndex:sec]
                           withRowAnimation:UITableViewRowAnimationFade];
     }
+}
+
+/// 區塊內的小標題（例如「點首頁標籤時」），對齊下面各列的標題
+- (UITableViewCell *)captionCellForRow:(NSDictionary *)row {
+    UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
+    cell.selectionStyle = UITableViewCellSelectionStyleNone;
+    TPApplyCardBackground(cell);
+    UILabel *l = [UILabel new];
+    l.text = TPL(row[@"title"]);
+    l.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
+    l.textColor = UIColor.secondaryLabelColor;
+    l.translatesAutoresizingMaskIntoConstraints = NO;
+    [cell.contentView addSubview:l];
+    UILayoutGuide *m = cell.contentView.layoutMarginsGuide;
+    [NSLayoutConstraint activateConstraints:@[
+        [l.leadingAnchor constraintEqualToAnchor:m.leadingAnchor constant:38],
+        [l.trailingAnchor constraintLessThanOrEqualToAnchor:m.trailingAnchor],
+        [l.topAnchor constraintEqualToAnchor:cell.contentView.topAnchor constant:12],
+        [l.bottomAnchor constraintEqualToAnchor:cell.contentView.bottomAnchor constant:-4],
+    ]];
+    return cell;
+}
+
+/// 主題配色：標題＋目前主題名稱，下方一排色票
+- (UITableViewCell *)themeCellForRow:(NSDictionary *)row {
+    UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
+    cell.selectionStyle = UITableViewCellSelectionStyleNone;
+    TPApplyCardBackground(cell);
+    UIView *cv = cell.contentView;
+    NSInteger cur = [TPPrefs integerForKey:TPKeyTheme];
+
+    UIImageView *icon = [[UIImageView alloc] initWithImage:TPLineIcon(row[@"icon"])];
+    icon.tintColor = TPAccentIcon();
+    icon.contentMode = UIViewContentModeCenter;
+    UILabel *title = [UILabel new];
+    title.text = TPL(row[@"title"]);
+    title.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+    title.textColor = UIColor.labelColor;
+    UILabel *name = [UILabel new];
+    name.text = TPL([TPUI themeNameAtIndex:cur]);
+    name.font = [UIFont systemFontOfSize:14 weight:UIFontWeightMedium];
+    name.textColor = TPAccentIcon();
+    UIStackView *dots = [UIStackView new];
+    dots.axis = UILayoutConstraintAxisHorizontal;
+    dots.distribution = UIStackViewDistributionEqualSpacing;
+    dots.alignment = UIStackViewAlignmentCenter;
+
+    __weak typeof(self) weakSelf = self;
+    for (NSInteger i = 0; i < [TPUI themeCount]; i++) {
+        UIButton *b = [UIButton buttonWithType:UIButtonTypeCustom];
+        b.backgroundColor = [TPUI themeColorAtIndex:i];
+        b.layer.cornerRadius = 15;
+        b.accessibilityLabel = TPL([TPUI themeNameAtIndex:i]);
+        if (i == cur) {
+            b.layer.borderWidth = 2.5;
+            b.layer.borderColor = UIColor.labelColor.CGColor;
+            [b setImage:[[UIImage systemImageNamed:@"checkmark"
+                                  withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:12 weight:UIImageSymbolWeightBold]]
+                         imageWithTintColor:UIColor.whiteColor renderingMode:UIImageRenderingModeAlwaysOriginal]
+               forState:UIControlStateNormal];
+        }
+        [b.widthAnchor constraintEqualToConstant:30].active = YES;
+        [b.heightAnchor constraintEqualToConstant:30].active = YES;
+        [b addAction:[UIAction actionWithHandler:^(UIAction *a) {
+            if ([TPPrefs integerForKey:TPKeyTheme] == i) return;
+            [TPPrefs setInteger:i forKey:TPKeyTheme];
+            [TPUI hapticLight];
+            [[NSNotificationCenter defaultCenter] postNotificationName:TPThemeDidChangeNotification object:nil];
+            [weakSelf applyTheme];
+        }] forControlEvents:UIControlEventTouchUpInside];
+        [dots addArrangedSubview:b];
+    }
+    for (UIView *v in @[icon, title, name, dots]) { v.translatesAutoresizingMaskIntoConstraints = NO; [cv addSubview:v]; }
+    UILayoutGuide *m = cv.layoutMarginsGuide;
+    [NSLayoutConstraint activateConstraints:@[
+        [icon.leadingAnchor constraintEqualToAnchor:m.leadingAnchor],
+        [icon.widthAnchor constraintEqualToConstant:26],
+        [icon.centerYAnchor constraintEqualToAnchor:title.centerYAnchor],
+        [title.leadingAnchor constraintEqualToAnchor:icon.trailingAnchor constant:12],
+        [title.topAnchor constraintEqualToAnchor:cv.topAnchor constant:14],
+        [name.trailingAnchor constraintEqualToAnchor:m.trailingAnchor],
+        [name.firstBaselineAnchor constraintEqualToAnchor:title.firstBaselineAnchor],
+        [name.leadingAnchor constraintGreaterThanOrEqualToAnchor:title.trailingAnchor constant:8],
+        [dots.topAnchor constraintEqualToAnchor:title.bottomAnchor constant:12],
+        [dots.leadingAnchor constraintEqualToAnchor:title.leadingAnchor],
+        [dots.trailingAnchor constraintEqualToAnchor:m.trailingAnchor constant:-4],
+        [dots.bottomAnchor constraintEqualToAnchor:cv.bottomAnchor constant:-14],
+    ]];
+    return cell;
 }
 
 /// F2 樣式：標題在上、分段按鈕在下，整列是一張霧面卡片
@@ -498,6 +661,8 @@ static BOOL TPConditionUsesKey(NSArray *cond, NSString *key) {
     NSDictionary *row = [self rowAt:ip];
     NSString *type = row[@"type"];
     if ([type isEqualToString:@"segment"]) return [self segmentCellForRow:row];
+    if ([type isEqualToString:@"theme"])   return [self themeCellForRow:row];
+    if ([type isEqualToString:@"caption"]) return [self captionCellForRow:row];
     NSString *detail = row[@"detail"];
 
     UIListContentConfiguration *c = detail.length ? [UIListContentConfiguration subtitleCellConfiguration]
@@ -542,6 +707,7 @@ static BOOL TPConditionUsesKey(NSArray *cond, NSString *key) {
     NSString *key = [self visibleRowsInSection:s][r][@"key"];
     [TPPrefs setBool:sw.on forKey:key];
     [TPUI hapticLight];
+    [_header setEnabledCount:[self enabledFeatureCount]];
     dispatch_async(dispatch_get_main_queue(), ^{ [self refreshConditionalRowsForKey:key]; });
 }
 

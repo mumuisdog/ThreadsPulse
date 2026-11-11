@@ -1,4 +1,5 @@
 #import "TPUI.h"
+#import "TPPrefs.h"
 #import "TPLocalization.h"
 #import "TPHUD.h"
 
@@ -40,7 +41,39 @@ UIViewController *TPTopViewController(void) {
 
 #pragma mark - TPUI
 
+NSString *const TPThemeDidChangeNotification = @"TPThemeDidChangeNotification";
+
 @implementation TPUI
+
+// 主題：{主色, 圖示亮色（深色模式）, 圖示深色（淺色模式）, 名稱}
+typedef struct { uint32_t main, iconDark, iconLight; const char *name; } TPTheme;
+static const TPTheme kTPThemes[] = {
+    { 0xD85A30, 0xF0997B, 0xC44F28, "Coral" },
+    { 0x2F7BEA, 0x7FB2FF, 0x1F63C9, "Ocean" },
+    { 0x1FA971, 0x6FD9A8, 0x168A5B, "Mint" },
+    { 0x8A5CF5, 0xB9A0FF, 0x7046D9, "Lavender" },
+    { 0xE0457B, 0xFF95B8, 0xC2335F, "Sakura" },
+    { 0xE08A00, 0xFFC15A, 0xB86F00, "Amber" },
+};
+static UIColor *TPHex(uint32_t v) {
+    return [UIColor colorWithRed:((v >> 16) & 0xFF) / 255.0 green:((v >> 8) & 0xFF) / 255.0 blue:(v & 0xFF) / 255.0 alpha:1];
+}
+static const TPTheme *TPCurrentTheme(void) {
+    NSInteger i = [TPPrefs integerForKey:TPKeyTheme];
+    if (i < 0 || i >= (NSInteger)(sizeof(kTPThemes) / sizeof(kTPThemes[0]))) i = 0;
+    return &kTPThemes[i];
+}
++ (NSInteger)themeCount { return sizeof(kTPThemes) / sizeof(kTPThemes[0]); }
++ (UIColor *)themeColorAtIndex:(NSInteger)i { return TPHex(kTPThemes[MAX(0, MIN(i, [self themeCount] - 1))].main); }
++ (NSString *)themeNameAtIndex:(NSInteger)i { return @(kTPThemes[MAX(0, MIN(i, [self themeCount] - 1))].name); }
++ (UIColor *)accent { return TPHex(TPCurrentTheme()->main); }
++ (UIColor *)accentIcon {
+    const TPTheme *t = TPCurrentTheme();
+    UIColor *dark = TPHex(t->iconDark), *light = TPHex(t->iconLight);
+    return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *tc) {
+        return tc.userInterfaceStyle == UIUserInterfaceStyleDark ? dark : light;
+    }];
+}
 
 + (void)hapticLight {
     UIImpactFeedbackGenerator *g = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];

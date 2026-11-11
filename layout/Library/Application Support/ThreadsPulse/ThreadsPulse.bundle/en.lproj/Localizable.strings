@@ -7,7 +7,6 @@
 "Download Button" = "Download Button";
 "Video" = "Video";
 "Default Playback Speed" = "Default Playback Speed";
-"Time" = "Time";
 "Post Time Format" = "Post Time Format";
 "Backup" = "Backup";
 "Export your settings to a file, and import it after reinstalling or on another device." = "Export your settings to a file, and import it after reinstalling or on another device.";
@@ -49,13 +48,10 @@
 "Invalid settings file" = "Invalid settings file";
 "Imported %ld settings" = "Imported %ld settings";
 "Found %ld of %ld items" = "Found %ld of %ld items";
-"Version %@" = "Version %@";
-"Enhancements for Threads" = "Enhancements for Threads";
 "Donate" = "Donate";
 "Buy Me a Coffee" = "Buy Me a Coffee";
 "Support ThreadsPulse on Ko-fi" = "Support ThreadsPulse on Ko-fi";
 "Your support keeps ThreadsPulse updated. Thank you!" = "Your support keeps ThreadsPulse updated. Thank you!";
-"Interactions" = "Interactions";
 "Like this post?" = "Like this post?";
 "Like" = "Like";
 "Save Profile Picture" = "Save Profile Picture";
@@ -82,7 +78,6 @@
 "The copied link isn't a Threads link" = "The copied link isn't a Threads link";
 "Opened link from clipboard" = "Opened link from clipboard";
 "Account switched" = "Account switched";
-"Clipboard Links" = "Clipboard Links";
 "When a Link Is Found" = "When a Link Is Found";
 "Ask" = "Ask";
 "Auto-open" = "Auto-open";
@@ -101,20 +96,16 @@
 "No Limit" = "No Limit";
 "Disable Pull to Refresh" = "Disable Pull to Refresh";
 "Pulling down at the top of the home feed won't refresh it, and the feed stops at the top without bouncing" = "Pulling down at the top of the home feed won't refresh it, and the feed stops at the top without bouncing";
-"Home Tab: Don't Scroll to Top" = "Home Tab: Don't Scroll to Top";
-"Home Tab: Don't Refresh" = "Home Tab: Don't Refresh";
 "Feed position kept" = "Feed position kept";
 "Pull to refresh blocked" = "Pull to refresh blocked";
 "Scroll to top blocked" = "Scroll to top blocked";
 "Home tab refresh blocked" = "Home tab refresh blocked";
 
 /* 追蹤建議 */
-"Stop the \"Suggested for you\" sheet from popping up" = "Stop the \"Suggested for you\" sheet from popping up";
 "Hide Follow Suggestions" = "Hide Follow Suggestions";
 "Follow suggestions hidden" = "Follow suggestions hidden";
 
 /* 介面 */
-"Interface" = "Interface";
 "Keep Tab Bar Visible" = "Keep Tab Bar Visible";
 "Scrolling won't hide the tab bar at the bottom; it always stays on screen" = "Scrolling won't hide the tab bar at the bottom; it always stays on screen";
 
@@ -143,3 +134,44 @@
 "Sideload Compatibility Fix" = "Sideload Compatibility Fix";
 "Keeps you signed in and app group data working after re-signing. Only active on re-signed apps; takes effect after reopening Threads" = "Keeps you signed in and app group data working after re-signing. Only active on re-signed apps; takes effect after reopening Threads";
 "Copy Name" = "Copy Name";
+"Last session" = "Last session";
+"Block Screenshot Detection" = "Block Screenshot Detection";
+"Threads won't know when you take a screenshot or record the screen" = "Threads won't know when you take a screenshot or record the screen";
+"Screenshot detection blocked" = "Screenshot detection blocked";
+
+"Stop the follow suggestions sheet from popping up" = "Stop the follow suggestions sheet from popping up";
+"Hide Suggested Accounts in Feed" = "Hide Suggested Accounts in Feed";
+"Hide suggested-account cards in the feed, and the \"Suggested for you\" section on profiles and after you follow someone" = "Hide suggested-account cards in the feed, and the \"Suggested for you\" section on profiles and after you follow someone";
+"Disable Autoplay" = "Disable Autoplay";
+"Videos in the feed won't play until you tap them" = "Videos in the feed won't play until you tap them";
+"Autoplay blocked" = "Autoplay blocked";
+"Playback allowed" = "Playback allowed";
+"Tap: no video player found" = "Tap: no video player found";
+"Tap: replaying video" = "Tap: replaying video";
+"Tap: video is playing" = "Tap: video is playing";
+"Tap: video still not playing" = "Tap: video still not playing";
+"Block Analytics" = "Block Analytics";
+"Stop Threads from sending usage data such as what you view, how long you stay and what you tap. Recommendations may become less accurate" = "Stop Threads from sending usage data such as what you view, how long you stay and what you tap. Recommendations may become less accurate";
+"Analytics blocked last session" = "Analytics blocked last session";
+"Hide Instagram Button" = "Hide Instagram Button";
+"Hide the Instagram button at the top of profiles" = "Hide the Instagram button at the top of profiles";
+"Open Links in External Browser" = "Open Links in External Browser";
+"Links in posts and bios open in Safari (or your default browser) instead of the in-app browser. Threads links still open in the app" = "Links in posts and bios open in Safari (or your default browser) instead of the in-app browser. Threads links still open in the app";
+"Hidden Items" = "Hidden Items";
+"Links" = "Links";
+"Interface & Interactions" = "Interface & Interactions";
+"Fetch the highest resolution from the web version" = "Fetch the highest resolution from the web version";
+"Long-press a profile picture on a profile to save it" = "Long-press a profile picture on a profile to save it";
+"When Tapping the Home Tab" = "When Tapping the Home Tab";
+"Don't Scroll to Top" = "Don't Scroll to Top";
+"Don't Refresh" = "Don't Refresh";
+"Theme Color" = "Theme Color";
+"Coral" = "Coral";
+"Ocean" = "Ocean";
+"Mint" = "Mint";
+"Lavender" = "Lavender";
+"Sakura" = "Sakura";
+"Amber" = "Amber";
+"Long-Press Home Tab for Settings" = "Long-Press Home Tab for Settings";
+"Long-pressing the Home tab at the bottom opens ThreadsPulse settings instead" = "Long-pressing the Home tab at the bottom opens ThreadsPulse settings instead";
+"Running · %ld features on" = "Running · %ld features on";

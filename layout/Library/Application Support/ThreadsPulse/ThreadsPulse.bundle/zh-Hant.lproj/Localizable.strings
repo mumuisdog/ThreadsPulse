@@ -7,7 +7,6 @@
 "Download Button" = "下載按鈕";
 "Video" = "影片";
 "Default Playback Speed" = "預設播放速度";
-"Time" = "時間";
 "Post Time Format" = "串文時間格式";
 "Backup" = "備份";
 "Export your settings to a file, and import it after reinstalling or on another device." = "將設定匯出成檔案，重新安裝或換手機後再匯入。";
@@ -49,13 +48,10 @@
 "Invalid settings file" = "設定檔格式不正確";
 "Imported %ld settings" = "已匯入 %ld 項設定";
 "Found %ld of %ld items" = "已找到 %ld／%ld 個項目";
-"Version %@" = "版本 %@";
-"Enhancements for Threads" = "Threads 增強插件";
 "Donate" = "贊助";
 "Buy Me a Coffee" = "請我喝杯咖啡";
 "Support ThreadsPulse on Ko-fi" = "在 Ko-fi 支持 ThreadsPulse";
 "Your support keeps ThreadsPulse updated. Thank you!" = "你的支持是 ThreadsPulse 持續更新的動力，謝謝你！";
-"Interactions" = "互動";
 "Like this post?" = "要對這則串文按讚嗎？";
 "Like" = "按讚";
 "Save Profile Picture" = "儲存大頭貼";
@@ -82,7 +78,6 @@
 "The copied link isn't a Threads link" = "剪貼簿裡不是 Threads 連結";
 "Opened link from clipboard" = "已開啟剪貼簿連結";
 "Account switched" = "已切換帳號";
-"Clipboard Links" = "剪貼簿連結";
 "When a Link Is Found" = "偵測到連結時";
 "Ask" = "詢問";
 "Auto-open" = "自動開啟";
@@ -101,20 +96,16 @@
 "No Limit" = "不限時間";
 "Disable Pull to Refresh" = "停用下拉重新整理";
 "Pulling down at the top of the home feed won't refresh it, and the feed stops at the top without bouncing" = "在首頁最上方往下拉不會重新整理，畫面停在頂端、不會回彈";
-"Home Tab: Don't Scroll to Top" = "點首頁標籤：不捲回頂端";
-"Home Tab: Don't Refresh" = "點首頁標籤：不重新整理";
 "Feed position kept" = "已保留動態位置";
 "Pull to refresh blocked" = "已擋下下拉重新整理";
 "Scroll to top blocked" = "已擋下捲回頂端";
 "Home tab refresh blocked" = "已擋下點首頁標籤重新整理";
 
 /* 追蹤建議 */
-"Stop the \"Suggested for you\" sheet from popping up" = "不再自動跳出「追蹤對象建議」視窗";
 "Hide Follow Suggestions" = "隱藏追蹤對象建議";
 "Follow suggestions hidden" = "已隱藏追蹤對象建議";
 
 /* 介面 */
-"Interface" = "介面";
 "Keep Tab Bar Visible" = "固定底部標籤列";
 "Scrolling won't hide the tab bar at the bottom; it always stays on screen" = "滑動串文時，最下方的功能標籤列不會自動隱藏，一直固定顯示";
 
@@ -143,3 +134,44 @@
 "Sideload Compatibility Fix" = "側載相容修正";
 "Keeps you signed in and app group data working after re-signing. Only active on re-signed apps; takes effect after reopening Threads" = "重新簽名後保持登入，並讓 App 群組資料正常讀寫。只在重新簽名的 App 上啟用；變更後重新開啟 Threads 生效";
 "Copy Name" = "複製姓名";
+"Last session" = "上次使用";
+"Block Screenshot Detection" = "停用截圖偵測";
+"Threads won't know when you take a screenshot or record the screen" = "截圖或錄影時，Threads 不會偵測到";
+"Screenshot detection blocked" = "已擋下截圖偵測";
+
+"Stop the follow suggestions sheet from popping up" = "不再自動跳出「追蹤對象建議」視窗";
+"Hide Suggested Accounts in Feed" = "隱藏動態裡的推薦帳號";
+"Hide suggested-account cards in the feed, and the \"Suggested for you\" section on profiles and after you follow someone" = "隱藏動態裡的推薦帳號卡片，以及個人檔案頁和追蹤某人後出現的「為你推薦」";
+"Disable Autoplay" = "停用自動播放";
+"Videos in the feed won't play until you tap them" = "滑動態時影片不會自動播放，點一下才開始播放";
+"Autoplay blocked" = "已擋下自動播放";
+"Playback allowed" = "已允許播放";
+"Tap: no video player found" = "點擊：找不到影片播放器";
+"Tap: replaying video" = "點擊：重新播放影片";
+"Tap: video is playing" = "點擊：影片已開始播放";
+"Tap: video still not playing" = "點擊：影片還是沒有播放";
+"Block Analytics" = "阻擋分析回傳";
+"Stop Threads from sending usage data such as what you view, how long you stay and what you tap. Recommendations may become less accurate" = "不讓 Threads 回傳你看了什麼、停留多久、點了什麼等使用紀錄。推薦內容可能會變得比較不準";
+"Analytics blocked last session" = "上次擋下的分析紀錄";
+"Hide Instagram Button" = "隱藏 Instagram 按鈕";
+"Hide the Instagram button at the top of profiles" = "隱藏個人檔案上方的 Instagram 按鈕";
+"Open Links in External Browser" = "使用外部瀏覽器開啟連結";
+"Links in posts and bios open in Safari (or your default browser) instead of the in-app browser. Threads links still open in the app" = "串文和個人簡介裡的連結改用 Safari（或你的預設瀏覽器）開啟，不用 App 內建瀏覽器。Threads 的連結仍在 App 裡開啟";
+"Hidden Items" = "隱藏項目";
+"Links" = "連結";
+"Interface & Interactions" = "介面與互動";
+"Fetch the highest resolution from the web version" = "從網頁版取得最高解析度";
+"Long-press a profile picture on a profile to save it" = "在個人檔案長按大頭貼即可儲存";
+"When Tapping the Home Tab" = "點首頁標籤時";
+"Don't Scroll to Top" = "不捲回頂端";
+"Don't Refresh" = "不重新整理";
+"Theme Color" = "主題配色";
+"Coral" = "珊瑚";
+"Ocean" = "海洋";
+"Mint" = "薄荷";
+"Lavender" = "薰衣草";
+"Sakura" = "櫻花";
+"Amber" = "琥珀";
+"Long-Press Home Tab for Settings" = "長按首頁標籤開啟設定";
+"Long-pressing the Home tab at the bottom opens ThreadsPulse settings instead" = "長按底部的首頁標籤時，改為開啟 ThreadsPulse 設定";
+"Running · %ld features on" = "運作中・已開啟 %ld 項功能";

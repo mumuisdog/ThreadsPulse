@@ -205,10 +205,26 @@ static const CGFloat kRing  = 64;
 
 #pragma mark - Toast
 
+// 同時出現多則提示時往上疊，不互相蓋住；最新的在最下面
+static NSMutableArray<UIView *> *sTPToasts;
+
+static void TPLayoutToasts(UIWindow *win, BOOL animated) {
+    CGFloat bottom = win.bounds.size.height - win.safeAreaInsets.bottom - 86;
+    for (UIView *v in sTPToasts.reverseObjectEnumerator) {
+        CGRect f = v.frame;
+        f.origin.y = bottom - f.size.height;
+        bottom = f.origin.y - 8;
+        if (animated) [UIView animateWithDuration:0.25 animations:^{ v.frame = f; }];
+        else v.frame = f;
+    }
+}
+
 + (void)toast:(NSString *)text {
     dispatch_async(dispatch_get_main_queue(), ^{
         UIWindow *win = TPKeyWindow();
         if (!win || !text.length) return;
+        if (!sTPToasts) sTPToasts = [NSMutableArray array];
+        while (sTPToasts.count >= 4) { [sTPToasts.firstObject removeFromSuperview]; [sTPToasts removeObjectAtIndex:0]; }
 
         UIVisualEffectView *pill = [[UIVisualEffectView alloc]
             initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemMaterialDark]];
@@ -230,16 +246,25 @@ static const CGFloat kRing  = 64;
         CGFloat w = MIN(s.width, maxW) + 36, h = s.height + 24;
         l.frame = CGRectMake(18, 12, w - 36, s.height);
         [pill.contentView addSubview:l];
-        pill.frame = CGRectMake((win.bounds.size.width - w) / 2,
-                                win.bounds.size.height - win.safeAreaInsets.bottom - 86 - h, w, h);
+        pill.frame = CGRectMake((win.bounds.size.width - w) / 2, 0, w, h);
+        [sTPToasts addObject:pill];
+        [win addSubview:pill];
+        TPLayoutToasts(win, YES);                 // 舊的往上推，新的放最下面
         pill.alpha = 0;
         pill.transform = CGAffineTransformMakeTranslation(0, 14);
-        [win addSubview:pill];
 
+        // 多行的提示停久一點，讓人看得完
+        NSTimeInterval stay = 2.0 + MAX(0, (NSInteger)[text componentsSeparatedByString:@"\n"].count - 1) * 1.5;
         [UIView animateWithDuration:0.3 delay:0 usingSpringWithDamping:0.8 initialSpringVelocity:0.5 options:0
                          animations:^{ pill.alpha = 1; pill.transform = CGAffineTransformIdentity; } completion:^(BOOL f) {
-            [UIView animateWithDuration:0.3 delay:2.0 options:0 animations:^{ pill.alpha = 0; }
-                             completion:^(BOOL f2) { [pill removeFromSuperview]; }];
+            [UIView animateWithDuration:0.3 delay:stay options:0 animations:^{ pill.alpha = 0; }
+                             completion:^(BOOL f2) {
+                [pill removeFromSuperview];
+                if ([sTPToasts containsObject:pill]) {
+                    [sTPToasts removeObject:pill];
+                    if (pill.window || win) TPLayoutToasts(win, YES);
+                }
+            }];
         }];
     });
 }
@@ -292,7 +317,7 @@ static UIView *sTPBanner;
         action.font = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
         action.textColor = UIColor.whiteColor;
         action.textAlignment = NSTextAlignmentCenter;
-        action.backgroundColor = [UIColor colorWithRed:0xD8/255.0 green:0x5A/255.0 blue:0x30/255.0 alpha:1];
+        action.backgroundColor = [TPUI accent];
         action.layer.cornerRadius = 15;
         action.clipsToBounds = YES;
         CGFloat aw = MAX(64, [action sizeThatFits:CGSizeMake(200, 30)].width + 24);

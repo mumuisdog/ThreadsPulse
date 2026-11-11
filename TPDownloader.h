@@ -15,6 +15,8 @@
 /// 從資料物件（例如貼文媒體的 GraphQL fragment）的實例變數中，找出最佳的影片／圖片網址
 + (NSURL *)bestVideoURLHarvestedFromObject:(id)obj;
 + (NSURL *)bestImageURLHarvestedFromObject:(id)obj;
+/// 從影片畫面本身與往上幾層畫面所持有的資料物件裡找影片網址（由近到遠，找到就停）
++ (NSURL *)bestVideoURLNearView:(UIView *)view;
 
 // ---- 工具 ----
 /// 從網址中的「1080x1350」之類字樣推算面積；找不到回傳 1
