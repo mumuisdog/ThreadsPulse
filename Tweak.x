@@ -22,7 +22,7 @@
 
 @interface NSObject (TPDecl)
 - (void)tp_threeFingerLongPress:(id)gesture;
-// IGFNFVideoPlayer 沒有標頭可用，先宣告這個方法讓編譯器認得
+// Threads 內部類別沒有可用的標頭，先宣告會用到的方法，讓編譯器認得
 - (void)setPlaybackSpeed:(float)speed;
 - (BOOL)isPlaying;
 - (void)play;          // FNFPlayer
@@ -203,7 +203,7 @@ static const void *kTPPlayerViewKey = &kTPPlayerViewKey;
 
 static void TPPauseIfHeld(id player);   // 停用自動播放：定義在後面
 
-/// 影片畫面拿到的是 Swift 外層播放器；真正被擋下播放的是它裡面的 IGFNFVideoPlayer
+/// 影片畫面拿到的是 Swift 外層播放器；真正負責播放的是它裡面的 IGFNFVideoPlayer
 static id TPInnerPlayer(id player) {
     if (![player respondsToSelector:@selector(videoPlayer)]) return player;
     id inner = [player videoPlayer];
@@ -1267,7 +1267,6 @@ static void TPPlayVideoAtTouch(UITouch *t) {
 
 %end
 
-// 被按住的影片：Threads 內部要底層播放器開始播放時直接忽略，等你點了才放開
 // 第一次：靜音試播，讓 Threads 跑到「開始播放」顯示聲音圖示，接著在第一格停住；之後的播放一律忽略
 static BOOL TPFNFShouldSkipPlay(id fnf) {
     if (!objc_getAssociatedObject(fnf, kTPHeldKey)) return NO;
@@ -1704,13 +1703,13 @@ static void TPTintEntryButton(UIButton *b) {
         return;
     }
 
-    UIColor *coral = [TPUI accentIcon];   // 主題色（與設定頁圖示同色）
+    UIColor *tint = [TPUI accentIcon];   // 主題色（與設定頁圖示同色）
     UIButtonConfiguration *cfg = [UIButtonConfiguration plainButtonConfiguration];
     cfg.title = @"Pulse";
     cfg.image = [UIImage systemImageNamed:@"waveform.path.ecg"
                         withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:15 weight:UIImageSymbolWeightSemibold]];
     cfg.imagePadding = 4;
-    cfg.baseForegroundColor = coral;
+    cfg.baseForegroundColor = tint;
     cfg.contentInsets = NSDirectionalEdgeInsetsMake(4, 4, 4, 0);
     cfg.titleTextAttributesTransformer = ^NSDictionary *(NSDictionary *a) {
         NSMutableDictionary *m = [a mutableCopy];
@@ -2571,7 +2570,7 @@ static const void *kTPHomePressKey = &kTPHomePressKey;
         %init(HomeLongPress);
         %init(Menu);
 
-        // 記錄進入背景的時間（保留首頁動態位置用）
+        // 進入背景時：記下時間（保留首頁動態位置用），並存下這次的鑰匙圈與分析回傳統計（下次開啟時的除錯提示用）
         [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidEnterBackgroundNotification
                                                           object:nil queue:NSOperationQueue.mainQueue
                                                       usingBlock:^(NSNotification *n) {
@@ -2589,7 +2588,7 @@ static const void *kTPHomePressKey = &kTPHomePressKey;
             });
         }];
 
-        // 除錯提示：顯示側載相容修正的狀態
+        // 除錯提示：顯示側載相容修正的狀態，以及上次擋下的分析紀錄數
         [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidFinishLaunchingNotification
                                                           object:nil queue:NSOperationQueue.mainQueue
                                                       usingBlock:^(NSNotification *n) {
