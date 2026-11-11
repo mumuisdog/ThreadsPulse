@@ -2510,9 +2510,18 @@ static const void *kTPHomePressKey = &kTPHomePressKey;
 // Threads 長按標籤列的處理（例如長按個人檔案切換帳號）都經過這裡；只攔首頁標籤，其他標籤照常
 %hook _TtC26BCNLucentTabBarCoordinator26BCNLucentTabBarCoordinator
 - (void)handleTabBarLongPress:(UIGestureRecognizer *)press {
-    if (![TPPrefs boolForKey:TPKeyHomeLongPress] || ![press isKindOfClass:[UIGestureRecognizer class]]) { %orig; return; }
-    if (press.state == UIGestureRecognizerStateBegan) {
+    BOOL began = [press isKindOfClass:[UIGestureRecognizer class]] && press.state == UIGestureRecognizerStateBegan;
+    if (![TPPrefs boolForKey:TPKeyHomeLongPress] || ![press isKindOfClass:[UIGestureRecognizer class]]) {
+        if (began) TPDebug([NSString stringWithFormat:@"%@: %@", TPL(@"Long-press tab"), TPL(@"feature is off")]);
+        %orig; return;
+    }
+    if (began) {
+        NSMutableArray<UIView *> *buttons = [NSMutableArray array];
+        TPCollectTabButtons(press.view, buttons, 0);
         BOOL home = TPIsHomeTabPress(press);
+        TPDebug([NSString stringWithFormat:@"%@: %@ (%@ %lu · x %.0f / %.0f)", TPL(@"Long-press tab"),
+                 TPL(home ? @"Home tab" : @"not the Home tab"), NSStringFromClass([press.view class]),
+                 (unsigned long)buttons.count, [press locationInView:press.view].x, press.view.bounds.size.width]);
         objc_setAssociatedObject(press, kTPHomePressKey, home ? @YES : nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         if (!home) { %orig; return; }
         gTPSuppressTabSelectUntil = CFAbsoluteTimeGetCurrent() + 10;   // 手指還按著：之後的「點選」都不算（最多 10 秒，避免卡住）
