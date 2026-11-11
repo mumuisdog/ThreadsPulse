@@ -50,7 +50,6 @@ static const CGFloat kRing  = 64;
     [_overlay addSubview:_card];
     UIView *content = _card.contentView;
 
-    // 進度環
     CGPoint c = CGPointMake(kCardW / 2, 22 + kRing / 2);
     UIBezierPath *path = [UIBezierPath bezierPathWithArcCenter:c radius:(kRing - 6) / 2
                                                     startAngle:-M_PI_2 endAngle:M_PI * 1.5 clockwise:YES];
@@ -70,7 +69,6 @@ static const CGFloat kRing  = 64;
     _ring.strokeEnd = 0.02;
     [content.layer addSublayer:_ring];
 
-    // 中央圖示
     _icon = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, 28, 28)];
     _icon.center = c;
     _icon.contentMode = UIViewContentModeScaleAspectFit;
@@ -79,7 +77,6 @@ static const CGFloat kRing  = 64;
                           withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:22 weight:UIImageSymbolWeightSemibold]];
     [content addSubview:_icon];
 
-    // 標題／副標題
     _titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(16, 100, kCardW - 32, 24)];
     _titleLabel.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];
     _titleLabel.textColor = UIColor.whiteColor;
@@ -96,7 +93,6 @@ static const CGFloat kRing  = 64;
     _subLabel.text = @"0%";
     [content addSubview:_subLabel];
 
-    // 取消按鈕
     if (cancel) {
         UIView *line = [[UIView alloc] initWithFrame:CGRectMake(0, 160, kCardW, 0.5)];
         line.backgroundColor = [UIColor colorWithWhite:1 alpha:0.12];
