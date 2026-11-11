@@ -10,7 +10,7 @@
 #import "TPVersion.h"
 static NSString *const kTPDonateURL = @"https://ko-fi.com/mumuisdog";
 
-#pragma mark - 樣式（F：霧面卡片）
+#pragma mark - 樣式（霧面卡片）
 
 static UIColor *TPDyn(UIColor *light, UIColor *dark) {
     return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *t) {
@@ -198,8 +198,7 @@ static NSString *TPTimePreview(NSInteger mode) {
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.navigationItem.title = nil;
-    // 完成按鈕：明確指定顏色，不沿用 Threads 的全域色調（深色模式下是黑色，看不清楚）
-    // Threads 會用全域外觀改掉導覽列按鈕的顏色（淺色模式甚至看不見），所以自己畫：主題色圓底＋白色勾勾，圖片固定顏色不受影響
+    // 完成按鈕自己畫（主題色圓底＋白色勾勾）：Threads 會用全域外觀改掉導覽列按鈕的顏色，深色、淺色模式都可能看不清楚
     UIButton *doneButton = [UIButton buttonWithType:UIButtonTypeCustom];
     _doneButton = doneButton;
     doneButton.frame = CGRectMake(0, 0, 32, 32);
@@ -539,7 +538,7 @@ static BOOL TPConditionUsesKey(NSArray *cond, NSString *key) {
     return cell;
 }
 
-/// F2 樣式：標題在上、分段按鈕在下，整列是一張霧面卡片
+/// 分段選項列：標題在上、分段按鈕在下，整列是一張霧面卡片
 - (UITableViewCell *)segmentCellForRow:(NSDictionary *)row {
     UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
