@@ -67,10 +67,6 @@ static NSInteger TPIntMax(NSString *key) {
             TPKeyHideFollowSuggest: @YES, TPKeyPinTabBar: @NO, TPKeyCopyProfile: @YES, TPKeySideloadFix: @YES, TPKeyBlockScreenshotDetect: @YES, TPKeyBlockAnalytics: @NO, TPKeyExternalBrowser: @NO, TPKeyHideIGButton: @NO, TPKeyHomeLongPress: @NO, TPKeyTheme: @0, TPKeyHideFeedSuggest: @YES, TPKeyNoAutoplay: @NO, TPKeyKeepFeed: @NO,         TPKeyKeepFeedLimit: @0,
             TPKeyNoPullRefresh: @NO,    TPKeyTabNoScrollTop: @NO,   TPKeyTabNoRefresh: @NO,
         }];
-        // 清掉已移除功能留下的舊設定
-        [d removeObjectForKey:@"tp_default_mute"];
-        [d removeObjectForKey:@"tp_video_audio"];
-        [d removeObjectForKey:@"tp_quality_highest"];
     });
     return d;
 }
