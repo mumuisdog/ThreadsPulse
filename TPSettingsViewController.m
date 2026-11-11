@@ -748,7 +748,8 @@ static BOOL TPConditionUsesKey(NSArray *cond, NSString *key) {
     [a addAction:[UIAlertAction actionWithTitle:TPL(@"Cancel") style:UIAlertActionStyleCancel handler:nil]];
     [a addAction:[UIAlertAction actionWithTitle:TPL(@"Reset") style:UIAlertActionStyleDestructive handler:^(UIAlertAction *x) {
         [TPPrefs resetAll];
-        [self.tableView reloadData];
+        [[NSNotificationCenter defaultCenter] postNotificationName:TPThemeDidChangeNotification object:nil];
+        [self applyTheme];
     }]];
     [self presentViewController:a animated:YES completion:nil];
 }
@@ -779,7 +780,9 @@ static BOOL TPConditionUsesKey(NSArray *cond, NSString *key) {
 - (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
     NSData *data = urls.firstObject ? [NSData dataWithContentsOfURL:urls.firstObject] : nil;
     NSInteger n = [TPPrefs importJSONData:data];
-    [self.tableView reloadData];
+    // 匯入的設定可能換了主題：重畫整頁（含狀態卡的功能數），Pulse 入口也跟著變色
+    [[NSNotificationCenter defaultCenter] postNotificationName:TPThemeDidChangeNotification object:nil];
+    [self applyTheme];
     if (n < 0) { [TPUI hapticError];   [TPHUD toast:TPL(@"Invalid settings file")]; }
     else       { [TPUI hapticSuccess]; [TPHUD toast:[NSString stringWithFormat:TPL(@"Imported %ld settings"), (long)n]]; }
 }
