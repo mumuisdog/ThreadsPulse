@@ -102,7 +102,7 @@ static const TPTheme *TPCurrentTheme(void) {
     b.layer.shadowRadius = 8;
     b.layer.shadowOffset = CGSizeMake(0, 2);
 
-    // F 風格：超薄霧面 + 一層淡白，圖片亮或暗都看得清楚
+    // 超薄霧面＋一層淡白，圖片亮或暗都看得清楚
     UIVisualEffectView *blur = [[UIVisualEffectView alloc]
         initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemUltraThinMaterialDark]];
     blur.frame = b.bounds;
