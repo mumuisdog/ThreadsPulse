@@ -48,7 +48,7 @@ static NSInteger TPInt(id v) {
 }
 
 /// 替候選網址打分數：-1 = 排除（純音訊）。數字越大解析度越高。
-static NSInteger TPScoreURL(NSURL *u, BOOL highest) {
+static NSInteger TPScoreURL(NSURL *u) {
     NSString *abs = u.absoluteString;
     NSString *tag = @"";
     NSURLComponents *c = [NSURLComponents componentsWithURL:u resolvingAgainstBaseURL:NO];
@@ -86,9 +86,8 @@ static NSInteger TPScoreURL(NSURL *u, BOOL highest) {
         versions = TPSafeValue(inner, @"videoVersions");
     }
 
-    const BOOL highest = YES;            // 一律下載最高畫質
-    NSURL *best = nil;
-    NSInteger bestScore = highest ? -1 : NSIntegerMax;
+    NSURL *best = nil;                   // 一律挑最高畫質
+    NSInteger bestScore = -1;
 
     for (id ver in versions) {
         NSString *s = TPSafeValue(ver, @"urlString");
@@ -102,8 +101,7 @@ static NSInteger TPScoreURL(NSURL *u, BOOL highest) {
         NSInteger h = TPInt(TPSafeValue(ver, @"height"));
         NSInteger score = w * h;
         if (score == 0) score = TPInt(TPSafeValue(ver, @"bandwidth"));
-        BOOL better = highest ? (score > bestScore) : (score < bestScore);
-        if (better) {
+        if (score > bestScore) {
             NSURL *u = [NSURL URLWithString:s];
             if (u) { best = u; bestScore = score; }
         }
@@ -115,9 +113,9 @@ static NSInteger TPScoreURL(NSURL *u, BOOL highest) {
         NSInteger bs = -1;
         for (id u in all) {
             if (![u isKindOfClass:[NSURL class]]) continue;
-            NSInteger sc = TPScoreURL(u, highest);
+            NSInteger sc = TPScoreURL(u);
             if (sc < 0) continue;
-            if (!best || (highest ? sc > bs : sc < bs)) { best = u; bs = sc; }
+            if (!best || sc > bs) { best = u; bs = sc; }
         }
     }
     if (!best) {
@@ -289,14 +287,13 @@ static NSInteger TPImageScore(NSURL *u) {
 
 
 + (NSURL *)bestVideoURLHarvestedFromObject:(id)obj {
-    const BOOL highest = YES;            // 一律下載最高畫質
-    NSURL *best = nil;
+    NSURL *best = nil;                   // 一律挑最高畫質
     NSInteger bs = -1;
     for (NSURL *u in TPHarvestURLs(obj)) {
         if (![u.path.lowercaseString containsString:@".mp4"]) continue;
-        NSInteger sc = TPScoreURL(u, highest);
+        NSInteger sc = TPScoreURL(u);
         if (sc < 0) continue;
-        if (!best || (highest ? sc > bs : sc < bs)) { best = u; bs = sc; }
+        if (!best || sc > bs) { best = u; bs = sc; }
     }
     return best;
 }
@@ -379,7 +376,6 @@ static NSURL *TPBestImageURLIn(id obj) {
 
 static NSMutableSet *sJobs;   // 讓工作在下載期間不被釋放
 
-/// 依檔頭判斷圖片格式；不支援（例如 WebP）回傳 nil，改走 UIImage 轉存。
 /// 讀檔頭判斷圖片格式。只回傳照片 App 一定吃得下的格式（jpg／png／heic）；
 /// 其他像 AVIF、WebP 回傳 nil，改走「解碼成 UIImage 再存」。
 static NSString *TPImageExtension(NSURL *file) {
